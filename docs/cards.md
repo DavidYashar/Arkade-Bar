@@ -1,6 +1,15 @@
 # Cards
 
-The deck is being designed. This is the contract it must meet.
+The deck is delivered and in `public/cards/`. 53 files, 0.91 MB, lossless WebP at 1024 x 1536.
+
+Delivered: 52 faces plus the back, "Royal Arena Crowned Diamond Back".
+
+Decisions:
+
+- The visible variety is intentional: pixel, geometric, minimalist, ornate and mirrored
+  cards are the arcade look, not an accident to normalise away.
+- The white frame is part of the art. Keep it; do not draw a rounded corner or a border
+  over it, and do not clip it.
 
 | | |
 |---|---|
