@@ -140,9 +140,10 @@ def build_room():
         cyl(f"duct_{x}", 0.32, D - 1.0, (x, 0, H - 0.55), m_ink, rot=(math.pi / 2, 0, 0), verts=20)
 
     # entrance: an open doorway between two posts; the leaves are built in the browser
-    box("door_post_l", (0.18, 0.22, 2.9), (-2.2, FRONT, 1.45), m_ink)
-    box("door_post_r", (0.18, 0.22, 2.9), (2.2, FRONT, 1.45), m_ink)
-    box("door_lintel", (4.6, 0.24, 0.22), (0, FRONT, 2.72), m_ink)
+    box("door_post_l", (0.34, 0.36, 3.12), (-2.2, FRONT, 1.56), m_ink)
+    box("door_post_r", (0.34, 0.36, 3.12), (2.2, FRONT, 1.56), m_ink)
+    box("door_lintel", (5.1, 0.38, 0.40), (0, FRONT, 2.92), m_ink)
+    box("door_guide", (4.6, 0.10, 0.06), (0, FRONT + 0.16, 0.03), m_ink)
 
 
 def build_bar():

@@ -101,65 +101,72 @@ function Doors({ open }: { open: boolean }) {
   const right = useRef<Object3D>(null);
 
   useFrame((_, delta) => {
-    // The leaves swing out onto the pavement, so the threshold stays clear.
-    const goals = [open ? Math.PI / 2 : 0, open ? -Math.PI / 2 : 0];
+    // Two identical leaves sliding apart on the track.
+    const travel = 2.2;
+    const goals = [open ? travel : 0, open ? -travel : 0];
     [left, right].forEach((ref, index) => {
       const node = ref.current;
       if (!node) return;
-      const goal = goals[index] ?? 0;
-      node.rotation.y += (goal - node.rotation.y) * Math.min(1, delta * 4);
+      const goalX = goals[index] ?? 0;
+      node.position.x += (goalX - node.position.x) * Math.min(1, delta * 3.2);
     });
   });
 
   return (
     <group>
-      <group position={[-2.2, 0, 9.0]}>
-        <group ref={left}>
-          <Leaf />
-        </group>
+      {/* track and header */}
+      <mesh position={[0, 2.78, 8.8]}>
+        <boxGeometry args={[9.4, 0.14, 0.24]} />
+        <meshStandardMaterial color="#24211d" roughness={0.4} metalness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.02, 8.8]}>
+        <boxGeometry args={[9.4, 0.04, 0.2]} />
+        <meshStandardMaterial color="#1b1916" roughness={0.6} metalness={0.4} />
+      </mesh>
+
+      <group ref={left} position={[0, 0, 8.78]}>
+        <Leaf />
       </group>
-      <group position={[2.2, 0, 9.0]}>
-        <group ref={right} scale={[-1, 1, 1]}>
-          <Leaf />
-        </group>
+      <group ref={right} position={[0, 0, 8.82]}>
+        <Leaf mirrored />
       </group>
     </group>
   );
 }
 
-/** One glass leaf, hinged at its left edge. */
-function Leaf() {
-  const frame = (
-    <meshStandardMaterial color="#2b2723" roughness={0.42} metalness={0.55} />
-  );
+/** One sliding glass leaf, 2.2 m wide, hinged nowhere. */
+function Leaf({ mirrored = false }: { mirrored?: boolean }) {
+  const inner = mirrored ? -1 : 1;
+  const bars: [number, number, number, number, number, number][] = [
+    // width, height, depth, x, y, z
+    [0.09, 2.62, 0.10, inner * 0.045, 1.35, 0],
+    [0.09, 2.62, 0.10, inner * 2.155, 1.35, 0],
+    [2.2, 0.12, 0.10, inner * 1.1, 2.62, 0],
+    [2.2, 0.24, 0.10, inner * 1.1, 0.14, 0],
+  ];
+
   return (
     <group>
-      <mesh position={[1.1, 1.36, 0]}>
-        <boxGeometry args={[2.12, 2.6, 0.02]} />
+      <mesh position={[inner * 1.1, 1.38, 0]}>
+        <boxGeometry args={[2.06, 2.5, 0.02]} />
         <meshStandardMaterial
           color="#cfe3dd"
-          roughness={0.06}
+          roughness={0.05}
           metalness={0.1}
           transparent
-          opacity={0.18}
+          opacity={0.16}
           side={2}
         />
       </mesh>
-      {[
-        [0.05, 2.72, 0.08, [0.03, 1.36, 0]],
-        [0.05, 2.72, 0.08, [2.17, 1.36, 0]],
-        [2.2, 0.07, 0.08, [1.1, 2.685, 0]],
-        [2.2, 0.16, 0.08, [1.1, 0.08, 0]],
-        [2.2, 0.05, 0.08, [1.1, 0.95, 0]],
-      ].map(([w, h, d, pos], index) => (
-        <mesh key={index} position={pos as [number, number, number]}>
-          <boxGeometry args={[w as number, h as number, d as number]} />
-          {frame}
+      {bars.map(([w, h, d, x, y, z], index) => (
+        <mesh key={index} position={[x, y, z]}>
+          <boxGeometry args={[w, h, d]} />
+          <meshStandardMaterial color="#2b2723" roughness={0.38} metalness={0.65} />
         </mesh>
       ))}
-      <mesh position={[1.95, 1.05, 0.09]}>
-        <cylinderGeometry args={[0.022, 0.022, 0.34, 10]} />
-        <meshStandardMaterial color="#c9a227" roughness={0.35} metalness={0.9} />
+      <mesh position={[inner * 1.98, 1.08, 0.07]}>
+        <boxGeometry args={[0.05, 0.4, 0.05]} />
+        <meshStandardMaterial color="#c9a227" roughness={0.3} metalness={0.95} />
       </mesh>
     </group>
   );
