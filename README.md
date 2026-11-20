@@ -15,7 +15,8 @@ npm run dev      # web on http://localhost:3400, api on 8787 (proxied at /api)
 The street is the start. Walk to the doors and they open; the six buttons (or keys 1 to 6)
 jump to a frame.
 
-- Desktop: click to capture the mouse, WASD or arrows to walk, drag to look.
+- Desktop: left click takes the mouse, arrows walk relative to the camera (up is ahead,
+  down is back, left and right strafe), right click gives the mouse back.
 - Phone: the pad at the bottom left walks, dragging the screen looks.
 
 ## Gates
