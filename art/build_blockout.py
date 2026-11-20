@@ -120,8 +120,8 @@ def build_room():
     plane("floor", (W, D), (0, 0, 0), m_concrete)
     plane("ceiling", (W, D), (0, 0, H), m_ink, rot=(math.pi, 0, 0))
     box("wall_back", (W, 0.2, H), (0, BACK, H / 2), m_walnut)
-    box("wall_front", (0.9, 0.2, H), (-W / 2 + 0.45, FRONT, H / 2), m_brick)
-    box("wall_front_r", (W / 2 - 0.9, 0.2, H), (W / 2 - 2.3, FRONT, H / 2), m_walnut)
+    box("wall_front", (W / 2 - 2.37, 0.2, H), (-(2.37 + (W / 2 - 2.37) / 2), FRONT, H / 2), m_walnut)
+    box("wall_front_r", (W / 2 - 2.37, 0.2, H), (2.37 + (W / 2 - 2.37) / 2, FRONT, H / 2), m_walnut)
     box("wall_left", (0.2, D, H), (-W / 2, 0, H / 2), m_brick)
     box("wall_right", (0.2, D, H), (W / 2, 0, H / 2), m_walnut)
 
