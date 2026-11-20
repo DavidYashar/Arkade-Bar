@@ -96,14 +96,16 @@ function Player({
   return null;
 }
 
+const DOOR_W = 1.96; // each leaf
+const DOOR_Z = 8.8;
+const MULLION = 0.14;
+
 function Doors({ open }: { open: boolean }) {
   const left = useRef<Object3D>(null);
   const right = useRef<Object3D>(null);
 
   useFrame((_, delta) => {
-    // Two identical leaves sliding apart on the track.
-    const travel = 2.2;
-    const goals = [open ? travel : 0, open ? -travel : 0];
+    const goals = [open ? -DOOR_W : 0, open ? DOOR_W : 0];
     [left, right].forEach((ref, index) => {
       const node = ref.current;
       if (!node) return;
@@ -114,41 +116,47 @@ function Doors({ open }: { open: boolean }) {
 
   return (
     <group>
-      {/* track and header */}
-      <mesh position={[0, 2.78, 8.8]}>
+      <mesh position={[0, 2.78, DOOR_Z]}>
         <boxGeometry args={[9.4, 0.14, 0.24]} />
         <meshStandardMaterial color="#24211d" roughness={0.4} metalness={0.6} />
       </mesh>
-      <mesh position={[0, 0.02, 8.8]}>
-        <boxGeometry args={[9.4, 0.04, 0.2]} />
+      <mesh position={[0, 0.03, DOOR_Z]}>
+        <boxGeometry args={[9.4, 0.06, 0.18]} />
         <meshStandardMaterial color="#1b1916" roughness={0.6} metalness={0.4} />
       </mesh>
 
-      <group ref={left} position={[0, 0, 8.78]}>
+      {/* A fixed mullion at the centre, so the two panes are visibly identical. */}
+      <mesh position={[0, 1.36, DOOR_Z - 0.02]}>
+        <boxGeometry args={[MULLION, 2.7, 0.12]} />
+        <meshStandardMaterial color="#2b2723" roughness={0.38} metalness={0.65} />
+      </mesh>
+
+      {/* One definition, mirrored: the leaves cannot differ. */}
+      <group ref={left} position={[-MULLION / 2 - DOOR_W, 0, DOOR_Z]}>
         <Leaf />
       </group>
-      <group ref={right} position={[0, 0, 8.82]}>
-        <Leaf mirrored />
+      <group ref={right} position={[MULLION / 2 + DOOR_W, 0, DOOR_Z]} scale={[-1, 1, 1]}>
+        <Leaf />
       </group>
     </group>
   );
 }
 
-/** One sliding glass leaf, 2.2 m wide, hinged nowhere. */
-function Leaf({ mirrored = false }: { mirrored?: boolean }) {
-  const inner = mirrored ? -1 : 1;
-  const bars: [number, number, number, number, number, number][] = [
-    // width, height, depth, x, y, z
-    [0.09, 2.62, 0.10, inner * 0.045, 1.35, 0],
-    [0.09, 2.62, 0.10, inner * 2.155, 1.35, 0],
-    [2.2, 0.12, 0.10, inner * 1.1, 2.62, 0],
-    [2.2, 0.24, 0.10, inner * 1.1, 0.14, 0],
+/** One sliding glass leaf, DOOR_W wide, built from its left edge. */
+function Leaf() {
+  const stile = 0.08;
+  const glass = DOOR_W - stile * 2;
+  const bars: [number, number, number, number, number][] = [
+    [stile, 2.62, 0.10, stile / 2, 1.36],
+    [stile, 2.62, 0.10, DOOR_W - stile / 2, 1.36],
+    [DOOR_W, 0.12, 0.10, DOOR_W / 2, 2.62],
+    [DOOR_W, 0.24, 0.10, DOOR_W / 2, 0.14],
   ];
 
   return (
     <group>
-      <mesh position={[inner * 1.1, 1.38, 0]}>
-        <boxGeometry args={[2.06, 2.5, 0.02]} />
+      <mesh position={[DOOR_W / 2, 1.38, 0]}>
+        <boxGeometry args={[glass, 2.5, 0.02]} />
         <meshStandardMaterial
           color="#cfe3dd"
           roughness={0.05}
@@ -158,13 +166,13 @@ function Leaf({ mirrored = false }: { mirrored?: boolean }) {
           side={2}
         />
       </mesh>
-      {bars.map(([w, h, d, x, y, z], index) => (
-        <mesh key={index} position={[x, y, z]}>
+      {bars.map(([w, h, d, x, y], index) => (
+        <mesh key={index} position={[x, y, 0]}>
           <boxGeometry args={[w, h, d]} />
           <meshStandardMaterial color="#2b2723" roughness={0.38} metalness={0.65} />
         </mesh>
       ))}
-      <mesh position={[inner * 1.98, 1.08, 0.07]}>
+      <mesh position={[DOOR_W - 0.08, 1.08, 0.07]}>
         <boxGeometry args={[0.05, 0.4, 0.05]} />
         <meshStandardMaterial color="#c9a227" roughness={0.3} metalness={0.95} />
       </mesh>
