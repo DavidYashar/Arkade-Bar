@@ -1,16 +1,71 @@
-import { Suspense, useEffect, useState } from 'react';
-import { BarScene } from './arcade/BarScene';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { BarScene, type Look } from './arcade/BarScene';
 import { VIEWS, type View } from './arcade/views';
 
+function lookAt(view: View): Look {
+  const [px, py, pz] = view.position;
+  const [tx, ty, tz] = view.target;
+  const dx = tx - px;
+  const dy = ty - py;
+  const dz = tz - pz;
+  const length = Math.hypot(dx, dy, dz) || 1;
+  return { yaw: Math.atan2(-dx / length, -dz / length), pitch: Math.asin(dy / length) };
+}
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
 export function App() {
-  const [view, setView] = useState<View>(VIEWS[2]!);
+  const [view, setView] = useState<View>({ ...VIEWS[0]!, position: [0, 1.68, 14.4] });
+  const [look, setLook] = useState<Look>(() => lookAt(VIEWS[0]!));
+  const [locked, setLocked] = useState(false);
+  const [hint, setHint] = useState(true);
+  const move = useRef({ x: 0, z: 0 });
+  const surface = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; y: number } | null>(null);
+  const stick = useRef<{ id: number; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setHint(false), 9000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const lock = useCallback(async () => {
+    const el = surface.current;
+    if (!el) return;
+    try {
+      await el.requestPointerLock?.();
+    } catch {
+      /* a browser may refuse the lock; drag still works */
+    }
+  }, []);
+
+  useEffect(() => {
+    const onChange = () => setLocked(document.pointerLockElement === surface.current);
+    document.addEventListener('pointerlockchange', onChange);
+    return () => document.removeEventListener('pointerlockchange', onChange);
+  }, []);
+
+  useEffect(() => {
+    const onMove = (event: MouseEvent) => {
+      if (document.pointerLockElement !== surface.current) return;
+      setLook((current) => ({
+        yaw: current.yaw - event.movementX * 0.0024,
+        pitch: clamp(current.pitch - event.movementY * 0.0022, -1.1, 1.1),
+      }));
+    };
+    document.addEventListener('mousemove', onMove);
+    return () => document.removeEventListener('mousemove', onMove);
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const index = Number(event.key);
       if (index >= 1 && index <= VIEWS.length) {
-        setView(VIEWS[index - 1]!);
+        const next = VIEWS[index - 1]!;
+        setView(next);
+        setLook(lookAt(next));
       }
+      if (event.code === 'Escape') setHint(true);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -18,9 +73,31 @@ export function App() {
 
   return (
     <main className="relative h-full w-full overflow-hidden bg-[#070d0a]">
-      <Suspense fallback={<Loading />}>
-        <BarScene view={view} />
-      </Suspense>
+      <div
+        ref={surface}
+        className="absolute inset-0 cursor-pointer touch-none"
+        onClick={lock}
+        onPointerDown={(event) => {
+          if (event.pointerType === 'touch') drag.current = { x: event.clientX, y: event.clientY };
+        }}
+        onPointerMove={(event) => {
+          if (event.pointerType !== 'touch' || !drag.current) return;
+          const dx = event.clientX - drag.current.x;
+          const dy = event.clientY - drag.current.y;
+          drag.current = { x: event.clientX, y: event.clientY };
+          setLook((current) => ({
+            yaw: current.yaw - dx * 0.005,
+            pitch: clamp(current.pitch - dy * 0.004, -1.1, 1.1),
+          }));
+        }}
+        onPointerUp={() => {
+          drag.current = null;
+        }}
+      >
+        <Suspense fallback={<Loading />}>
+          <BarScene view={view} look={look} move={move} />
+        </Suspense>
+      </div>
 
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 sm:p-7">
         <div>
@@ -29,9 +106,19 @@ export function App() {
         </div>
         <p className="text-right text-[10px] uppercase tracking-[0.24em] text-[#7f9587]">
           Grey box<br />
-          design pass
+          walk inside
         </p>
       </header>
+
+      <p
+        className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c9973f]/40 bg-black/55 px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-[#f0e6cf] transition-opacity duration-500 ${
+          hint ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        {locked ? 'WASD to walk · drag to look' : 'Click to walk in'}
+      </p>
+
+      <Joystick stick={stick} move={move} />
 
       <nav aria-label="Views" className="absolute inset-x-0 bottom-0 p-3 sm:p-6">
         <ul className="mx-auto flex max-w-3xl flex-wrap justify-center gap-2">
@@ -41,7 +128,10 @@ export function App() {
               <li key={item.id}>
                 <button
                   type="button"
-                  onClick={() => setView(item)}
+                  onClick={() => {
+                    setView(item);
+                    setLook(lookAt(item));
+                  }}
                   aria-pressed={active}
                   className={`flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] uppercase tracking-[0.16em] transition sm:px-4 sm:text-xs ${
                     active
@@ -56,11 +146,63 @@ export function App() {
             );
           })}
         </ul>
-        <p className="mt-3 text-center text-[10px] uppercase tracking-[0.2em] text-[#6f8377]">
-          Press 1 to 6 to move
-        </p>
       </nav>
     </main>
+  );
+}
+
+function Joystick({
+  stick,
+  move,
+}: {
+  stick: React.RefObject<{ id: number; x: number; y: number } | null>;
+  move: React.RefObject<{ x: number; z: number }>;
+}) {
+  const base = useRef<HTMLDivElement>(null);
+  const [knob, setKnob] = useState({ x: 0, y: 0 });
+
+  const release = () => {
+    stick.current = null;
+    setKnob({ x: 0, y: 0 });
+    move.current.x = 0;
+    move.current.z = 0;
+  };
+
+  return (
+    <div
+      ref={base}
+      className="absolute bottom-20 left-4 size-32 touch-none select-none rounded-full border border-[#2a3a30] bg-black/35 sm:bottom-24 sm:left-6 sm:size-36"
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        stick.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        (event.target as HTMLElement).setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const origin = stick.current;
+        if (!origin || origin.id !== event.pointerId) return;
+        const dx = event.clientX - origin.x;
+        const dy = event.clientY - origin.y;
+        const length = Math.hypot(dx, dy) || 1;
+        const limit = 46;
+        const kx = (dx / length) * Math.min(limit, length);
+        const ky = (dy / length) * Math.min(limit, length);
+        setKnob({ x: kx, y: ky });
+        move.current.x = kx / limit;
+        move.current.z = ky / limit;
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      aria-label="Walk"
+      role="presentation"
+    >
+      <div
+        className="pointer-events-none absolute left-1/2 top-1/2 size-12 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c9973f]/50 bg-[#c9973f]/25"
+        style={{ transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))` }}
+      />
+      <span className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-[9px] uppercase tracking-[0.2em] text-[#7f9587]">
+        Walk
+      </span>
+    </div>
   );
 }
 
