@@ -49,8 +49,8 @@ export function App() {
     const onMove = (event: MouseEvent) => {
       if (document.pointerLockElement !== surface.current) return;
       setLook((current) => ({
-        yaw: current.yaw - event.movementX * 0.0024,
-        pitch: clamp(current.pitch - event.movementY * 0.0022, -1.1, 1.1),
+        yaw: current.yaw - event.movementX * 0.0032,
+        pitch: clamp(current.pitch - event.movementY * 0.0028, -1.1, 1.1),
       }));
     };
     document.addEventListener('mousemove', onMove);
@@ -91,19 +91,24 @@ export function App() {
             if (document.pointerLockElement) document.exitPointerLock();
             return;
           }
-          if (event.pointerType === 'touch') drag.current = { x: event.clientX, y: event.clientY };
+          if (document.pointerLockElement !== surface.current) {
+            drag.current = { x: event.clientX, y: event.clientY };
+          }
         }}
         onPointerMove={(event) => {
-          if (event.pointerType !== 'touch' || !drag.current) return;
+          if (!drag.current) return;
           const dx = event.clientX - drag.current.x;
           const dy = event.clientY - drag.current.y;
           drag.current = { x: event.clientX, y: event.clientY };
           setLook((current) => ({
-            yaw: current.yaw - dx * 0.005,
-            pitch: clamp(current.pitch - dy * 0.004, -1.1, 1.1),
+            yaw: current.yaw - dx * 0.006,
+            pitch: clamp(current.pitch - dy * 0.005, -1.1, 1.1),
           }));
         }}
         onPointerUp={() => {
+          drag.current = null;
+        }}
+        onPointerLeave={() => {
           drag.current = null;
         }}
       >
@@ -135,7 +140,7 @@ export function App() {
       >
         {locked
           ? 'Arrows walk · move the mouse to look · right click frees it'
-          : 'Click to take the mouse'}
+          : 'Click to take the mouse, or drag to look'}
       </p>
 
       <Joystick stick={stick} move={move} />
