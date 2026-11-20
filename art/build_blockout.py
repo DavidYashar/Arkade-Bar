@@ -282,8 +282,7 @@ def build_exterior():
         if abs(x) < 2.5:
             continue
         box(f"f_slat_{i}", (0.10, 0.10, 3.2), (x, FRONT - 0.45, 1.6), m_walnut)
-    box("sign_backing", (5.4, 0.20, 0.85), (0, FRONT - 0.55, 3.05), m_ink)
-    box("sign_text", (4.6, 0.10, 0.30), (0, FRONT - 0.66, 3.05), m_amber)
+    # the sign above the door is a neon built in the browser, not geometry here
     # outside: sidewalk and street edge
     plane("sidewalk", (W + 10.0, 6.0), (0, FRONT - 3.0, -0.01), m_concrete)
     box("kerb", (W + 10.0, 0.25, 0.12), (0, FRONT - 6.0, 0.06), m_ink)

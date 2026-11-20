@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import type { Object3D } from 'three';
-import { Vector3 } from 'three';
+import { CanvasTexture, LinearFilter, MeshBasicMaterial, PointLight, Vector3 } from 'three';
 import type { View } from './views';
 import { VIEWS } from './views';
 import { blocked, insideBounds, DOOR_AT } from './colliders';
@@ -223,6 +223,75 @@ function Blockout() {
   return <primitive object={scene} />;
 }
 
+
+/** The neon above the door: drawn once into a canvas, then blinked. */
+function NeonSign() {
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = '900 148px "Arial Narrow", "Segoe UI", Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const draw = (blur: number, color: string) => {
+      ctx.shadowColor = 'rgba(255, 160, 60, 0.95)';
+      ctx.shadowBlur = blur;
+      ctx.fillStyle = color;
+      ctx.fillText('ARKADE BAR', 512, 136);
+    };
+
+    draw(64, '#ff9a3c');
+    draw(40, '#ffbe73');
+    draw(18, '#ffe4bd');
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff8ec';
+    ctx.fillText('ARKADE BAR', 512, 136);
+
+    const tex = new CanvasTexture(canvas);
+    tex.anisotropy = 4;
+    tex.generateMipmaps = false;
+    tex.minFilter = LinearFilter;
+    tex.magFilter = LinearFilter;
+    return tex;
+  }, []);
+
+  const material = useRef<MeshBasicMaterial>(null);
+  const glow = useRef<PointLight>(null);
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    // A steady hum, a slow pulse, and the occasional dip of a real tube.
+    const hum = 0.88 + 0.07 * Math.sin(t * 9.1) + 0.04 * Math.sin(t * 27.7);
+    const dip = Math.sin(t * 1.7) > 0.995 || Math.sin(t * 2.31) > 0.997 ? 0.35 : 1;
+    if (material.current) material.current.opacity = hum * dip;
+    if (glow.current) glow.current.intensity = 9 * hum * dip;
+  });
+
+  if (!texture) return null;
+
+  return (
+    <group position={[0, 3.12, 9.62]}>
+      <mesh>
+        <planeGeometry args={[4.4, 1.1]} />
+        <meshBasicMaterial
+          ref={material}
+          map={texture}
+          transparent
+          depthWrite={false}
+          toneMapped={false}
+          opacity={0.92}
+          alphaTest={0.02}
+        />
+      </mesh>
+      <pointLight ref={glow} position={[0, -0.1, 0.9]} intensity={9} distance={9} color="#ffab55" />
+    </group>
+  );
+}
+
 function DebugScene() {
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
@@ -258,6 +327,7 @@ export function BarScene({ view, look, move }: { view: View; look: Look; move: R
       <DebugScene />
       <Player view={view} look={look} move={move} onDoor={setDoorOpen} />
       <Doors open={doorOpen} />
+      <NeonSign />
       <Blockout />
     </Canvas>
   );
