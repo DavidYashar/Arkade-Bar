@@ -77,7 +77,20 @@ export function App() {
         ref={surface}
         className="absolute inset-0 cursor-pointer touch-none"
         onClick={lock}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          if (document.pointerLockElement === surface.current) {
+            document.exitPointerLock();
+          }
+        }}
         onPointerDown={(event) => {
+          // The right button always gives the mouse back, whether the context
+          // menu arrives or not.
+          if (event.button === 2) {
+            event.preventDefault();
+            if (document.pointerLockElement) document.exitPointerLock();
+            return;
+          }
           if (event.pointerType === 'touch') drag.current = { x: event.clientX, y: event.clientY };
         }}
         onPointerMove={(event) => {
@@ -99,6 +112,11 @@ export function App() {
         </Suspense>
       </div>
 
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/75 via-black/35 to-transparent"
+      />
+
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 sm:p-7">
         <div>
           <p className="text-[10px] uppercase tracking-[0.32em] text-[#c9973f]">Funtico</p>
@@ -115,7 +133,9 @@ export function App() {
           hint ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        {locked ? 'WASD to walk · drag to look' : 'Click to walk in'}
+        {locked
+          ? 'Arrows walk · move the mouse to look · right click frees it'
+          : 'Click to take the mouse'}
       </p>
 
       <Joystick stick={stick} move={move} />
