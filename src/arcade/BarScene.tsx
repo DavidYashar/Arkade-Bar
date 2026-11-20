@@ -96,9 +96,10 @@ function Player({
   return null;
 }
 
-const DOOR_W = 1.96; // each leaf
-const DOOR_Z = 8.8;
+const DOOR_W = 2.08; // each leaf, overlapping the posts by 12 cm
+const DOOR_Z = 8.78;
 const MULLION = 0.14;
+const STILE = 0.08;
 
 function Doors({ open }: { open: boolean }) {
   const left = useRef<Object3D>(null);
@@ -125,38 +126,43 @@ function Doors({ open }: { open: boolean }) {
         <meshStandardMaterial color="#1b1916" roughness={0.6} metalness={0.4} />
       </mesh>
 
-      {/* A fixed mullion at the centre, so the two panes are visibly identical. */}
+      {/* A fixed mullion at the centre. */}
       <mesh position={[0, 1.36, DOOR_Z - 0.02]}>
         <boxGeometry args={[MULLION, 2.7, 0.12]} />
         <meshStandardMaterial color="#2b2723" roughness={0.38} metalness={0.65} />
       </mesh>
 
-      {/* One definition, mirrored: the leaves cannot differ. */}
-      <group ref={left} position={[-MULLION / 2 - DOOR_W, 0, DOOR_Z]}>
-        <Leaf />
+      <group ref={left} position={[0, 0, DOOR_Z]}>
+        <Leaf side={-1} />
       </group>
-      <group ref={right} position={[MULLION / 2 + DOOR_W, 0, DOOR_Z]} scale={[-1, 1, 1]}>
-        <Leaf />
+      <group ref={right} position={[0, 0, DOOR_Z]}>
+        <Leaf side={1} />
       </group>
     </group>
   );
 }
 
-/** One sliding glass leaf, DOOR_W wide, built from its left edge. */
-function Leaf() {
-  const stile = 0.08;
-  const glass = DOOR_W - stile * 2;
+/**
+ * One sliding glass leaf. Both sides come from the same arithmetic, so they
+ * cannot end up different widths: `side` only flips the sign.
+ */
+function Leaf({ side }: { side: -1 | 1 }) {
+  const inner = side * (MULLION / 2);
+  const outer = side * (MULLION / 2 + DOOR_W);
+  const mid = (inner + outer) / 2;
+  const glassWidth = DOOR_W - STILE * 2;
+  const glassMid = mid;
   const bars: [number, number, number, number, number][] = [
-    [stile, 2.62, 0.10, stile / 2, 1.36],
-    [stile, 2.62, 0.10, DOOR_W - stile / 2, 1.36],
-    [DOOR_W, 0.12, 0.10, DOOR_W / 2, 2.62],
-    [DOOR_W, 0.24, 0.10, DOOR_W / 2, 0.14],
+    [(inner + side * STILE + inner) / 2, STILE, 2.62, 1.36, 0],
+    [(outer + outer - side * STILE) / 2, STILE, 2.62, 1.36, 0],
+    [mid, DOOR_W, 0.12, 2.62, 0],
+    [mid, DOOR_W, 0.24, 0.14, 0],
   ];
 
   return (
     <group>
-      <mesh position={[DOOR_W / 2, 1.38, 0]}>
-        <boxGeometry args={[glass, 2.5, 0.02]} />
+      <mesh position={[glassMid, 1.38, 0]}>
+        <boxGeometry args={[glassWidth, 2.5, 0.02]} />
         <meshStandardMaterial
           color="#cfe3dd"
           roughness={0.05}
@@ -166,13 +172,13 @@ function Leaf() {
           side={2}
         />
       </mesh>
-      {bars.map(([w, h, d, x, y], index) => (
+      {bars.map(([x, w, h, y], index) => (
         <mesh key={index} position={[x, y, 0]}>
-          <boxGeometry args={[w, h, d]} />
+          <boxGeometry args={[w, h, 0.10]} />
           <meshStandardMaterial color="#2b2723" roughness={0.38} metalness={0.65} />
         </mesh>
       ))}
-      <mesh position={[DOOR_W - 0.08, 1.08, 0.07]}>
+      <mesh position={[mid, 1.08, 0.07]}>
         <boxGeometry args={[0.05, 0.4, 0.05]} />
         <meshStandardMaterial color="#c9a227" roughness={0.3} metalness={0.95} />
       </mesh>
@@ -200,9 +206,21 @@ function Blockout() {
 
   useEffect(() => {
     document.title = `Arkade Bar · ${objects} objects · ${triangles.toLocaleString()} tris`;
-  }, [objects, triangles]);
+    (window as unknown as { __scene?: Object3D }).__scene = scene;
+  }, [objects, triangles, scene]);
 
   return <primitive object={scene} />;
+}
+
+function DebugScene() {
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    const w = window as unknown as { __three?: Object3D; __camera?: unknown };
+    w.__three = scene;
+    w.__camera = camera;
+  }, [scene, camera]);
+  return null;
 }
 
 export function BarScene({ view, look, move }: { view: View; look: Look; move: React.RefObject<{ x: number; z: number }> }) {
@@ -223,6 +241,7 @@ export function BarScene({ view, look, move }: { view: View; look: Look; move: R
       <pointLight position={[-5.6, 2.6, -0.6]} intensity={10} distance={10} color="#ff3fae" />
       <pointLight position={[5.6, 2.6, -1.4]} intensity={10} distance={10} color="#35d8ff" />
       <pointLight position={[0, 4.2, 13.5]} intensity={18} distance={14} color="#ffbf73" />
+      <DebugScene />
       <Player view={view} look={look} move={move} onDoor={setDoorOpen} />
       <Doors open={doorOpen} />
       <Blockout />
