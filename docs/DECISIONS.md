@@ -23,3 +23,10 @@ decisions, its markup is not.
 - Orientation of the bar: landscape first is the current recommendation.
 - Which games share the bar with the blackjack duel.
 - Funtico launch questions are parked in the Duel Dudes copy, notes/funtico-launch.md.
+
+## Scope
+
+Arkade Bar is the Funtico project. Everything for it lives in this folder: the bar, the
+interface, the server, and every game under `src/games/`. Nothing from Bankroll is imported,
+copied or shared. The old Duel Dudes app is reference only, and the original game repo stays
+untouched for Bankroll.

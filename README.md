@@ -22,3 +22,15 @@ npm run typecheck && npm run build && npm test
   this machine (access denied at build). The scripts point it at `.tmp` in the project.
 - `docs/DECISIONS.md` holds the stack decisions and what is still open.
 - `server/index.ts` is the only server code. Everything else is the browser.
+
+## Layout
+
+```
+src/arcade/      the 3D bar: scene, cameras, interaction
+src/games/       every game, one folder each; blackjack is the first
+server/          the only server code: grading and Funtico settlement
+art/             Blender scripts, when the bar starts
+public/models/   exported glTF from Blender
+public/cards/    the deck
+docs/            decisions, the card contract, the Funtico launch questions
+```
