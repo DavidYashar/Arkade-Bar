@@ -121,7 +121,7 @@ def build_room():
     plane("ceiling", (W, D), (0, 0, H), m_ink, rot=(math.pi, 0, 0))
     box("wall_back", (W, 0.2, H), (0, BACK, H / 2), m_walnut)
     box("wall_front", (0.9, 0.2, H), (-W / 2 + 0.45, FRONT, H / 2), m_brick)
-    box("wall_front_r", (W / 2 - 0.9, 0.2, H), (W / 2 - 2.3, FRONT, H / 2), m_brick)
+    box("wall_front_r", (W / 2 - 0.9, 0.2, H), (W / 2 - 2.3, FRONT, H / 2), m_walnut)
     box("wall_left", (0.2, D, H), (-W / 2, 0, H / 2), m_brick)
     box("wall_right", (0.2, D, H), (W / 2, 0, H / 2), m_walnut)
 
@@ -139,11 +139,8 @@ def build_room():
     for x in (-3.2, 3.2):
         cyl(f"duct_{x}", 0.32, D - 1.0, (x, 0, H - 0.55), m_ink, rot=(math.pi / 2, 0, 0), verts=20)
 
-    # entrance: an open doorway between two posts; the leaves are built in the browser
-    box("door_post_l", (0.34, 0.36, 3.12), (-2.2, FRONT, 1.56), m_ink)
-    box("door_post_r", (0.34, 0.36, 3.12), (2.2, FRONT, 1.56), m_ink)
-    box("door_lintel", (5.1, 0.38, 0.40), (0, FRONT, 2.92), m_ink)
-    box("door_guide", (4.6, 0.10, 0.06), (0, FRONT + 0.16, 0.03), m_ink)
+    # entrance: the opening only. Frame, track and leaves are built in the browser,
+    # all from the same numbers, so they cannot disagree.
 
 
 def build_bar():

@@ -96,17 +96,21 @@ function Player({
   return null;
 }
 
-const DOOR_W = 2.08; // each leaf, overlapping the posts by 12 cm
-const DOOR_Z = 8.78;
+// Everything about the entrance comes from these numbers: frame, track, leaves.
+const OPENING = 4.06;      // clear width between the posts
+const LEAF = OPENING / 2 - 0.07; // 1.96, the fixed mullion takes the middle 0.14
 const MULLION = 0.14;
-const STILE = 0.08;
+const STILE = 0.12;
+const DOOR_Z = 8.78;
+const FRAME_Z = 9.0;
+const HEAD = 3.12;         // top of the frame
 
 function Doors({ open }: { open: boolean }) {
   const left = useRef<Object3D>(null);
   const right = useRef<Object3D>(null);
 
   useFrame((_, delta) => {
-    const goals = [open ? -DOOR_W : 0, open ? DOOR_W : 0];
+    const goals = [open ? -LEAF : 0, open ? LEAF : 0];
     [left, right].forEach((ref, index) => {
       const node = ref.current;
       if (!node) return;
@@ -115,19 +119,31 @@ function Doors({ open }: { open: boolean }) {
     });
   });
 
+  const half = OPENING / 2;
+
   return (
     <group>
-      <mesh position={[0, 2.78, DOOR_Z]}>
-        <boxGeometry args={[9.4, 0.14, 0.24]} />
-        <meshStandardMaterial color="#24211d" roughness={0.4} metalness={0.6} />
+      {/* posts, lintel and track, all derived from OPENING */}
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[side * (half + 0.17), HEAD / 2, FRAME_Z]}>
+          <boxGeometry args={[0.34, HEAD, 0.36]} />
+          <meshStandardMaterial color="#241f1b" roughness={0.45} metalness={0.35} />
+        </mesh>
+      ))}
+      <mesh position={[0, HEAD - 0.2, FRAME_Z]}>
+        <boxGeometry args={[OPENING + 0.68, 0.4, 0.38]} />
+        <meshStandardMaterial color="#241f1b" roughness={0.45} metalness={0.35} />
+      </mesh>
+      <mesh position={[0, HEAD - 0.48, DOOR_Z]}>
+        <boxGeometry args={[OPENING + 1.4, 0.12, 0.22]} />
+        <meshStandardMaterial color="#1f1b18" roughness={0.4} metalness={0.55} />
       </mesh>
       <mesh position={[0, 0.03, DOOR_Z]}>
-        <boxGeometry args={[9.4, 0.06, 0.18]} />
-        <meshStandardMaterial color="#1b1916" roughness={0.6} metalness={0.4} />
+        <boxGeometry args={[OPENING + 1.4, 0.06, 0.16]} />
+        <meshStandardMaterial color="#171412" roughness={0.6} metalness={0.4} />
       </mesh>
 
-      {/* A fixed mullion at the centre. */}
-      <mesh position={[0, 1.36, DOOR_Z - 0.02]}>
+      <mesh position={[0, 1.38, DOOR_Z - 0.03]}>
         <boxGeometry args={[MULLION, 2.7, 0.12]} />
         <meshStandardMaterial color="#2b2723" roughness={0.38} metalness={0.65} />
       </mesh>
@@ -142,26 +158,16 @@ function Doors({ open }: { open: boolean }) {
   );
 }
 
-/**
- * One sliding glass leaf. Both sides come from the same arithmetic, so they
- * cannot end up different widths: `side` only flips the sign.
- */
+/** One sliding glass leaf. `side` only flips the sign; every size is shared. */
 function Leaf({ side }: { side: -1 | 1 }) {
   const inner = side * (MULLION / 2);
-  const outer = side * (MULLION / 2 + DOOR_W);
+  const outer = side * (MULLION / 2 + LEAF);
   const mid = (inner + outer) / 2;
-  const glassWidth = DOOR_W - STILE * 2;
-  const glassMid = mid;
-  const bars: [number, number, number, number, number][] = [
-    [(inner + side * STILE + inner) / 2, STILE, 2.62, 1.36, 0],
-    [(outer + outer - side * STILE) / 2, STILE, 2.62, 1.36, 0],
-    [mid, DOOR_W, 0.12, 2.62, 0],
-    [mid, DOOR_W, 0.24, 0.14, 0],
-  ];
+  const glassWidth = LEAF - STILE * 2;
 
   return (
     <group>
-      <mesh position={[glassMid, 1.38, 0]}>
+      <mesh position={[mid, 1.38, 0]}>
         <boxGeometry args={[glassWidth, 2.5, 0.02]} />
         <meshStandardMaterial
           color="#cfe3dd"
@@ -172,7 +178,12 @@ function Leaf({ side }: { side: -1 | 1 }) {
           side={2}
         />
       </mesh>
-      {bars.map(([x, w, h, y], index) => (
+      {([
+        [inner + side * (STILE / 2), STILE, 2.62, 1.36],
+        [outer - side * (STILE / 2), STILE, 2.62, 1.36],
+        [mid, LEAF, 0.12, 2.62],
+        [mid, LEAF, 0.24, 0.14],
+      ] as [number, number, number, number][]).map(([x, w, h, y], index) => (
         <mesh key={index} position={[x, y, 0]}>
           <boxGeometry args={[w, h, 0.10]} />
           <meshStandardMaterial color="#2b2723" roughness={0.38} metalness={0.65} />
@@ -241,6 +252,9 @@ export function BarScene({ view, look, move }: { view: View; look: Look; move: R
       <pointLight position={[-5.6, 2.6, -0.6]} intensity={10} distance={10} color="#ff3fae" />
       <pointLight position={[5.6, 2.6, -1.4]} intensity={10} distance={10} color="#35d8ff" />
       <pointLight position={[0, 4.2, 13.5]} intensity={18} distance={14} color="#ffbf73" />
+      {/* symmetric pair: the entrance must read the same on both sides */}
+      <pointLight position={[-3.4, 2.6, 6.6]} intensity={10} distance={11} color="#ffbf73" />
+      <pointLight position={[3.4, 2.6, 6.6]} intensity={10} distance={11} color="#ffbf73" />
       <DebugScene />
       <Player view={view} look={look} move={move} onDoor={setDoorOpen} />
       <Doors open={doorOpen} />
