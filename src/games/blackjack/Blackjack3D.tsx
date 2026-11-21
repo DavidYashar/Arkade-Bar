@@ -19,7 +19,11 @@ const TABLE_Y = 0.862;
 
 /** Where a card comes from, and how long it takes to land. */
 const SHOE: [number, number, number] = [0.95, 0.95, 0.05];
-const DEAL_S = 0.32;
+export const DEAL_S = 0.32;
+
+/** When the player's n-th card leaves the shoe, in seconds. The opening pair is
+ * spaced so the deal reads player, dealer, player, dealer; a hit card flies at once. */
+export const playerDelay = (index: number) => (index === 1 ? 0.32 : 0);
 
 export function BlackjackTable() {
   const gltf = useGLTF('/models/bar/table.glb');
@@ -178,7 +182,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           rank={rank}
           suit={suits.dealer[i + 2]!}
           target={slot(i + 2, -0.50)}
-          delay={0.62 + i * 0.16}
+          delay={0}
           tilt={(i - 1) * 0.03}
         />
       ))}
@@ -188,7 +192,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           rank={rank}
           suit={suits.player[i]!}
           target={slot(i, 0.50)}
-          delay={i === 0 ? 0 : 0.32 + (i - 1) * 0.16}
+          delay={playerDelay(i)}
           tilt={(i % 2 === 0 ? -1 : 1) * 0.03}
         />
       ))}

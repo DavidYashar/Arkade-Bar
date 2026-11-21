@@ -14,6 +14,7 @@ import {
 } from './round';
 import { isCorrect, readHand, type Action, type Rank } from './strategy';
 import { playPlace } from '@/lib/sfx';
+import { DEAL_S, playerDelay } from './Blackjack3D';
 
 export type Phase = 'idle' | 'deciding' | 'dealer' | 'verdict' | 'summary';
 
@@ -106,7 +107,7 @@ export function useBlackjack() {
 
   /** The dealer turns its hole card, draws while under 17, then the hand is judged. */
   const dealerPlays = useCallback(
-    (index: number, cards: Rank[], action: Action | null, correct: boolean | null) => {
+    (index: number, cards: Rank[], action: Action | null, correct: boolean | null, startDelayMs = REVEAL_HOLE_MS) => {
       const deal = script.current[index];
       if (!deal) return;
       const total = readHand(cards).total;
@@ -142,7 +143,7 @@ export function useBlackjack() {
         timers.current.push(id);
       };
 
-      const id = window.setTimeout(() => step(1), REVEAL_HOLE_MS);
+      const id = window.setTimeout(() => step(1), startDelayMs);
       timers.current.push(id);
     },
     [next],
@@ -162,8 +163,9 @@ export function useBlackjack() {
         const drawn = drawPlayer(seed.current, index, state.player.length);
         const cards = [...state.player, drawn];
         if (readHand(cards).total > 21) {
-          // bust: the dealer shows its cards and the hand ends
-          dealerPlays(index, cards, 'hit', isCorrect(hand.cards, hand.dealerUp, 'hit'));
+          // a bust: the dealer turns over once the card has landed, not a moment sooner
+          const landedMs = (playerDelay(cards.length - 1) + DEAL_S) * 1000 + 25;
+          dealerPlays(index, cards, 'hit', isCorrect(hand.cards, hand.dealerUp, 'hit'), landedMs);
         } else {
           setState((s) => ({ ...s, player: cards }));
         }
