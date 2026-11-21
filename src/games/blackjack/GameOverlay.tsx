@@ -17,7 +17,7 @@ export function GameOverlay({
   onLeave: () => void;
   onRestart: () => void;
 }) {
-  const playing = state.phase === 'deciding' || state.phase === 'verdict';
+  const playing = state.phase === 'deciding' || state.phase === 'dealer' || state.phase === 'verdict';
 
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 sm:p-6">
@@ -96,9 +96,13 @@ export function GameOverlay({
                 Split
               </button>
             </>
+          ) : state.phase === 'dealer' ? (
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[#9fb5a7]">
+              The dealer plays
+            </p>
           ) : (
             <p className="text-[11px] uppercase tracking-[0.24em] text-[#9fb5a7]">
-              Next hand in {Math.ceil(2.6)}s
+              Next hand
             </p>
           )}
         </div>

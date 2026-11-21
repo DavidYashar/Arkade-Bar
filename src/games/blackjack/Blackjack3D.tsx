@@ -1,10 +1,17 @@
 import { useMemo, useRef } from 'react';
 import { useGLTF, useTexture } from '@react-three/drei';
+import { SUITS } from './deck';
 import { useFrame } from '@react-three/fiber';
 import type { Mesh } from 'three';
 import type { Rank } from './strategy';
 import { cardArt, makeSuitDealer, BACK_ART } from './deck';
 import type { BlackjackState } from './useBlackjack';
+
+const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'] as const;
+for (const rank of RANKS) {
+  for (const suit of SUITS) useTexture.preload(`/cards/${rank}${suit}.webp`);
+}
+useTexture.preload('/cards/back.webp');
 
 export const CARD_W = 0.20;
 export const CARD_H = 0.28;

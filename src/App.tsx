@@ -3,6 +3,7 @@ import { BarScene, type Look } from './arcade/BarScene';
 import { VIEWS, type View } from './arcade/views';
 import { useBlackjack } from './games/blackjack/useBlackjack';
 import { GameOverlay } from './games/blackjack/GameOverlay';
+import { unlockSfx } from './lib/sfx';
 
 function lookAt(view: View): Look {
   const [px, py, pz] = view.position;
@@ -130,7 +131,10 @@ export function App() {
       {seated && (
         <GameOverlay
           state={blackjack.state}
-          onAnswer={(action) => blackjack.answer(action)}
+          onAnswer={(action) => {
+            unlockSfx();
+            blackjack.answer(action);
+          }}
           onLeave={() => {
             blackjack.leave();
             setSeated(false);
@@ -143,6 +147,7 @@ export function App() {
         <button
           type="button"
           onClick={() => {
+            unlockSfx();
             setSeated(true);
             blackjack.start();
           }}

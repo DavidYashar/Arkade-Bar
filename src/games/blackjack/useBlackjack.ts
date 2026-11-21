@@ -13,10 +13,13 @@ import {
   type RoundResult,
 } from './round';
 import { isCorrect, readHand, type Action, type Rank } from './strategy';
+import { playDeal, playPlace } from '@/lib/sfx';
 
-export type Phase = 'idle' | 'deciding' | 'verdict' | 'summary';
+export type Phase = 'idle' | 'deciding' | 'dealer' | 'verdict' | 'summary';
 
-const VERDICT_MS = 2600;
+const VERDICT_MS = 2800;
+const REVEAL_HOLE_MS = 520;
+const DEALER_DRAW_MS = 620;
 
 export type BlackjackState = {
   phase: Phase;
@@ -57,6 +60,7 @@ export function useBlackjack() {
   const decisions = useRef<Array<LoggedDecision | null>>([]);
   const shownAt = useRef(0);
   const timers = useRef<number[]>([]);
+  const hole = useRef<Rank>('A');
 
   const clearTimers = useCallback(() => {
     timers.current.forEach((id) => window.clearTimeout(id));
@@ -69,6 +73,14 @@ export function useBlackjack() {
     const hand = script.current[index];
     if (!hand) return;
     shownAt.current = performance.now();
+    // four cards leave the shoe as the hand is dealt
+    for (let i = 0; i < 4; i += 1) {
+      const id = window.setTimeout(() => playDeal(0.65), 120 + i * 110);
+      timers.current.push(id);
+    }
+    // The hole is the card the dealer is dealt face down: the hand's second card.
+    const cards = [...hand.cards, ...[]];
+    hole.current = cards[0] ?? 'A';
     setState({
       ...empty,
       phase: 'deciding',
@@ -97,29 +109,47 @@ export function useBlackjack() {
     [beginHand, finish],
   );
 
-  const settle = useCallback(
-    (index: number, action: Action | null, cards: Rank[], answerCorrect: boolean | null) => {
-      const hand = script.current[index];
-      if (!hand) return;
+  /** The dealer turns its hole card, draws while under 17, then the hand is judged. */
+  const dealerPlays = useCallback(
+    (index: number, cards: Rank[], action: Action | null, correct: boolean | null) => {
+      const deal = script.current[index];
+      if (!deal) return;
       const total = readHand(cards).total;
       const busted = total > 21;
-      const dealer = dealerTurn(seed.current, index, hand, busted);
-      const outcome = busted ? 'lose' : outcomeOf(cards, total, busted, dealer);
-
-      setState((s) => ({
-        ...s,
-        phase: 'verdict',
-        player: cards,
-        dealer: dealer.cards,
-        holeHidden: false,
-        verdict: answerCorrect,
-        outcome,
-        remaining: 0,
-      }));
-
+      const dealer = dealerTurn(seed.current, index, deal, busted);
+      const all = dealer.cards;
       const logged = decisions.current;
-      const timer = window.setTimeout(() => next(logged, index), VERDICT_MS);
-      timers.current.push(timer);
+
+      setState((s) => ({ ...s, phase: 'dealer', player: cards, dealer: [all[0]!], holeHidden: true, verdict: null, remaining: 0 }));
+
+      const step = (i: number) => {
+        if (i >= all.length) {
+          const outcome = busted ? 'lose' : outcomeOf(cards, total, busted, dealer);
+          setState((s) => ({
+            ...s,
+            phase: 'verdict',
+            dealer: all,
+            holeHidden: false,
+            verdict: correct,
+            outcome,
+          }));
+          const id = window.setTimeout(() => next(logged, index), VERDICT_MS);
+          timers.current.push(id);
+          return;
+        }
+        if (i === 1) playPlace(0.6);
+        else if (i > 1) playDeal(0.65);
+        setState((s) => ({
+          ...s,
+          dealer: all.slice(0, i + 1),
+          holeHidden: i < 1 ? s.holeHidden : false,
+        }));
+        const id = window.setTimeout(() => step(i + 1), i === 1 ? REVEAL_HOLE_MS : DEALER_DRAW_MS);
+        timers.current.push(id);
+      };
+
+      const id = window.setTimeout(() => step(1), REVEAL_HOLE_MS);
+      timers.current.push(id);
     },
     [next],
   );
@@ -129,19 +159,29 @@ export function useBlackjack() {
       const index = state.index;
       const hand = script.current[index];
       if (!hand || state.phase !== 'deciding') return;
-      const atMs = performance.now() - shownAt.current;
-      decisions.current[index] = { atMs, taken: action };
-
-      let cards: Rank[] = [...hand.cards];
-      if (action === 'hit' || action === 'double') {
-        cards = [...cards, drawPlayer(seed.current, index, 1)];
+      const logged = decisions.current;
+      if (logged[index] === null) {
+        logged[index] = { atMs: performance.now() - shownAt.current, taken: action };
       }
-      // A double takes exactly one card; a hit may keep going, but for the first
-      // version one hit per hand resolves the hand.
-      const correct = isCorrect(hand.cards, hand.dealerUp, action);
-      settle(index, action, cards, correct);
+
+      if (action === 'hit') {
+        const drawn = drawPlayer(seed.current, index, state.player.length);
+        const cards = [...state.player, drawn];
+        playDeal(0.7);
+        if (readHand(cards).total > 21) {
+          // bust: the dealer shows its cards and the hand ends
+          dealerPlays(index, cards, 'hit', isCorrect(hand.cards, hand.dealerUp, 'hit'));
+        } else {
+          setState((s) => ({ ...s, player: cards }));
+        }
+        return;
+      }
+
+      const cards: Rank[] = action === 'double' ? [...state.player, drawPlayer(seed.current, index, 1)] : [...state.player];
+      if (action === 'double') playDeal(0.7);
+      dealerPlays(index, cards, action, isCorrect(hand.cards, hand.dealerUp, action));
     },
-    [state.index, state.phase, settle],
+    [state.index, state.phase, state.player, dealerPlays],
   );
 
   const start = useCallback(() => {
@@ -169,12 +209,17 @@ export function useBlackjack() {
         window.clearInterval(id);
         const index = state.index;
         decisions.current[index] = null;
-        const hand = script.current[index];
-        if (hand) settle(index, null, [...hand.cards], null);
+        dealerPlays(index, [...state.player], null, null);
       }
     }, 100);
     return () => window.clearInterval(id);
-  }, [state.phase, state.index, settle]);
+  }, [state.phase, state.index, state.player, dealerPlays]);
 
-  return { state, start, leave, answer: resolve, isNaturalHole: state.dealer.length === 1 && isNatural(state.player) };
+  return {
+    state,
+    start,
+    leave,
+    answer: resolve,
+    isNaturalHole: state.dealer.length === 1 && isNatural(state.player),
+  };
 }

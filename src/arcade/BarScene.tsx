@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF, useTexture } from '@react-three/drei';
 import type { Object3D } from 'three';
@@ -482,7 +482,9 @@ export function BarScene({
         onPosition={onPosition}
       />
       <BlackjackTable />
-      <BlackjackCards state={blackjack} />
+      <Suspense fallback={null}>
+        <BlackjackCards state={blackjack} />
+      </Suspense>
       <Doors open={doorOpen} />
       <SkyStars />
       <LabelAnchors />
