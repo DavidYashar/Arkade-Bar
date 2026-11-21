@@ -102,9 +102,9 @@ export function App() {
               seat={seated}
               blackjack={blackjack.state}
               onPosition={(x, z) => {
-                const near = Math.hypot(x - 0, z - 2.0) < 3.9;
+                const near = Math.hypot(x - 0, z - 2.0) < 3.2;
                 setNearTable((current) => (current === near ? current : near));
-                const cabinet = Math.hypot(x + 5.9, z - 1.6) < 4.2;
+                const cabinet = Math.hypot(x + 6.05, z - 2.2) < 3.2;
                 setNearPinball((current) => (current === cabinet ? current : cabinet));
               }}
             />

@@ -39,10 +39,8 @@ export const FURNITURE: Box[] = [
   // the lounge
   { minX: -5.4, maxX: -3.2, minZ: 6.2, maxZ: 7.2 },
   { minX: -5.0, maxX: -3.6, minZ: 4.5, maxZ: 5.3 },
-  // the five cabinets, seen as their footprint
-  { minX: -7.0, maxX: -5.4, minZ: 3.0, maxZ: 3.9 },
-  { minX: -7.0, maxX: -5.4, minZ: 1.2, maxZ: 2.1 },
-  { minX: -7.0, maxX: -5.4, minZ: -0.6, maxZ: 0.3 },
+  // the pinball machine on the left wall, and two cabinets on the right
+  { minX: -7.0, maxX: -5.4, minZ: 1.85, maxZ: 2.55 },
   { minX: 5.4, maxX: 7.0, minZ: 2.0, maxZ: 2.9 },
   { minX: 5.4, maxX: 7.0, minZ: 0.2, maxZ: 1.1 },
   // the planters on the pavement

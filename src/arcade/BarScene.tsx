@@ -39,7 +39,22 @@ function Player({
   const frame = useRef(0);
 
   useEffect(() => {
-    pos.current.set(view.position[0], EYE, view.position[2]);
+    // A frame can point at a spot that a sofa or a table already occupies. Stand at
+    // the nearest free place instead, or the player would spawn stuck inside furniture.
+    const stand = (x: number, z: number): [number, number] => {
+      if (!blocked(x, z, RADIUS, doorOpen.current) && insideBounds(x, z)) return [x, z];
+      for (let r = 0.25; r <= 2; r += 0.25) {
+        for (let i = 0; i < 16; i += 1) {
+          const a = (i / 16) * Math.PI * 2;
+          const nx = x + Math.cos(a) * r;
+          const nz = z + Math.sin(a) * r;
+          if (!blocked(nx, nz, RADIUS, doorOpen.current) && insideBounds(nx, nz)) return [nx, nz];
+        }
+      }
+      return [x, z];
+    };
+    const [x, z] = stand(view.position[0], view.position[2]);
+    pos.current.set(x, EYE, z);
   }, [view]);
 
   useEffect(() => {
@@ -428,6 +443,23 @@ function LabelAnchors() {
 }
 
 
+/** The pinball machine on the left wall: the cabinet you actually play. */
+export const PINBALL_AT: [number, number] = [-6.05, 2.2];
+
+function PinballCabinet() {
+  const gltf = useGLTF('/models/bar/pinball-cabinet.glb');
+  return (
+    <group>
+      <primitive object={gltf.scene} position={[PINBALL_AT[0], 0, PINBALL_AT[1]]} />
+      {/* its own light, so the machine reads in that dark corner */}
+      <pointLight position={[-5.2, 2.2, 2.9]} intensity={9} distance={4.5} color="#ffd9a8" />
+      <pointLight position={[-6.4, 1.5, 2.2]} intensity={4} distance={2.4} color="#ff8a3d" />
+    </group>
+  );
+}
+
+useGLTF.preload('/models/bar/pinball-cabinet.glb');
+
 /** The room's walnut floor, one tile every 1.2 m: planks about 20 cm wide. */
 function useFloorTexture(size: [number, number]) {
   const source = useTexture('/textures/floor-walnut.webp');
@@ -547,6 +579,7 @@ export function BarScene({
           <WoodWalls />
           <BarFloor />
           <Blockout />
+          <PinballCabinet />
         </>
       )}
       {seat && (

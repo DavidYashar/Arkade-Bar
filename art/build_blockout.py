@@ -193,9 +193,7 @@ def build_cabinet(name, loc, rot_z, screen_mat):
 
 
 def build_cabinets():
-    # Three on the left wall, two on the right, all facing the room centre.
-    for i, y in enumerate((-3.4, -1.6, 0.2)):
-        build_cabinet(f"cab_l{i + 1}", (-W / 2 + 1.1, y), math.radians(75), m_screen)
+    # Two on the right wall; the left wall now carries the pinball cabinet alone.
     for i, y in enumerate((-2.4, -0.6)):
         build_cabinet(f"cab_r{i + 1}", (W / 2 - 1.1, y), math.radians(-75), m_screen)
 
