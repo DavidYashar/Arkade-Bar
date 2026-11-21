@@ -426,6 +426,22 @@ function LabelAnchors() {
   return null;
 }
 
+
+/** The bar's concrete floor, the only part of the room the game needs. */
+function GameFloor() {
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
+        <planeGeometry args={[80, 80]} />
+        <meshStandardMaterial color="#3a3632" roughness={0.55} metalness={0.05} />
+      </mesh>
+      <pointLight position={[0, 3.2, 1.0]} intensity={26} distance={9} color="#ffbf73" />
+      <pointLight position={[-2.4, 2.2, 3.4]} intensity={8} distance={7} color="#ff3fae" />
+      <pointLight position={[2.4, 2.2, 0.4]} intensity={8} distance={7} color="#35d8ff" />
+    </group>
+  );
+}
+
 function DebugScene() {
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
@@ -481,16 +497,25 @@ export function BarScene({
         seat={seat}
         onPosition={onPosition}
       />
-      <BlackjackTable />
-      <Suspense fallback={null}>
-        <BlackjackCards state={blackjack} />
-      </Suspense>
-      <Doors open={doorOpen} />
       <SkyStars />
       <LabelAnchors />
-      <NeonSign />
-      <WoodWalls />
-      <Blockout />
+      <BlackjackTable />
+      {!seat && (
+        <>
+          <Doors open={doorOpen} />
+          <NeonSign />
+          <WoodWalls />
+          <Blockout />
+        </>
+      )}
+      {seat && (
+        <>
+          <GameFloor />
+          <Suspense fallback={null}>
+            <BlackjackCards state={blackjack} />
+          </Suspense>
+        </>
+      )}
     </Canvas>
   );
 }
