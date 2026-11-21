@@ -113,13 +113,16 @@ const PER_ROW = 3;
 const SPACING = 0.21;
 const ROW_OVERLAP = 0.155;
 
-/** Cards sit three to a row; a fourth starts a new row overlapping the first. */
-function slot(index: number, total: number, baseZ: number, towardsCentre: 1 | -1): [number, number, number] {
+/**
+ * Cards sit three to a row, anchored so the second card is always at the centre:
+ * the first sits half a step to its left, and adding a third never shifts the pair.
+ * A fourth card starts a new row further down the table, overlapping the first.
+ */
+function slot(index: number, baseZ: number): [number, number, number] {
   const row = Math.floor(index / PER_ROW);
   const col = index % PER_ROW;
-  const count = Math.min(PER_ROW, total - row * PER_ROW);
-  const x = (col - (count - 1) / 2) * SPACING;
-  const z = baseZ + towardsCentre * row * ROW_OVERLAP;
+  const x = (col - 1) * SPACING;
+  const z = baseZ + row * ROW_OVERLAP;
   return [x, TABLE_Y + 0.004 + index * 0.0006, z];
 }
 
@@ -134,8 +137,6 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
 
   if (state.phase === 'idle') return null;
 
-  const dealerTotal = state.dealer.length;
-  const playerTotal = state.player.length;
   const holeRank = state.dealer[1] ?? 'A';
   const holeSuit = suits.dealer[1] ?? 'S';
 
@@ -145,7 +146,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
         <Card
           rank={state.dealer[0]}
           suit={suits.dealer[0]!}
-          target={slot(0, dealerTotal, -0.50, 1)}
+          target={slot(0, -0.50)}
           delay={0}
           tilt={-0.03}
         />
@@ -154,7 +155,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
         rank={holeRank}
         suit={holeSuit}
         down={state.holeHidden}
-        target={slot(1, dealerTotal, -0.50, 1)}
+        target={slot(1, -0.50)}
         delay={0.09}
         tilt={0.03}
       />
@@ -163,7 +164,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           key={`d-${i}`}
           rank={rank}
           suit={suits.dealer[i + 2]!}
-          target={slot(i + 2, dealerTotal, -0.50, 1)}
+          target={slot(i + 2, -0.50)}
           delay={i * 0.06}
           tilt={(i - 1) * 0.03}
         />
@@ -173,7 +174,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           key={`p-${i}`}
           rank={rank}
           suit={suits.player[i]!}
-          target={slot(i, playerTotal, 0.50, -1)}
+          target={slot(i, 0.50)}
           delay={0.18 + i * 0.07}
           tilt={(i % 2 === 0 ? -1 : 1) * 0.03}
         />
