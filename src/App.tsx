@@ -151,7 +151,7 @@ export function App() {
             setSeated(true);
             blackjack.start();
           }}
-          className="pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c9973f]/50 bg-black/70 px-6 py-3 text-[11px] uppercase tracking-[0.24em] text-[#f0e6cf] hover:border-[#c9973f]"
+          className="key-pill pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c9973f]/50 bg-black/70 px-6 py-3 text-[11px] uppercase tracking-[0.24em] text-[#f0e6cf] hover:border-[#c9973f]"
         >
           Sit at the card table
         </button>

@@ -18,7 +18,7 @@ body {
 }
 
 
-/* The table keys, same family as the entrance buttons. */
+/* The table keys: pressed into the felt rather than floating on it. */
 .key {
   min-height: 48px;
   flex: 1 1 120px;
@@ -29,32 +29,60 @@ body {
   font-size: 14px;
   letter-spacing: 0.04em;
   cursor: pointer;
-  transition: transform 120ms ease, background 160ms ease, border-color 160ms ease;
+  transform: translateY(0);
+  box-shadow:
+    0 3px 0 var(--key-edge, #0a0806),
+    0 8px 16px rgb(0 0 0 / 0.38);
+  transition:
+    transform 90ms ease,
+    box-shadow 90ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
 }
-.key:active { transform: translateY(1px); }
-.key-cream { background: #efe6d6; color: #17140f; }
-.key-ink { background: #17140f; color: #efe6d6; border-color: #3a3128; }
-.key-gold { background: #c9973f; color: #17140f; }
-.key-ghost { background: transparent; color: #c8d4ca; border-color: #3a4a40; }
-.key:disabled { opacity: 0.45; cursor: not-allowed; }
+.key:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 0 var(--key-edge, #0a0806),
+    0 10px 18px rgb(0 0 0 / 0.42);
+}
+.key:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 0 0 var(--key-edge, #0a0806),
+    0 2px 6px rgb(0 0 0 / 0.35);
+}
+.key:focus-visible {
+  outline: 2px solid #c9973f;
+  outline-offset: 2px;
+}
+.key-cream { --key-edge: #a8977c; background: #efe6d6; color: #17140f; }
+.key-ink { --key-edge: #000000; background: #17140f; color: #efe6d6; border-color: #3a3128; }
+.key-gold { --key-edge: #7d5a1c; background: #c9973f; color: #17140f; }
+.key-ghost { --key-edge: #1e2a23; background: rgb(0 0 0 / 0.25); color: #c8d4ca; border-color: #3a4a40; }
+.key:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
 
-
-/* The round summary drops in, and its lines follow one after another. */
-@keyframes panel-drop {
-  from { opacity: 0; transform: translateY(-28px) scale(0.985); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+/* The small pill buttons: same press, smaller edge. */
+.key-pill {
+  transform: translateY(0);
+  box-shadow:
+    0 2px 0 rgb(0 0 0 / 0.55),
+    0 6px 12px rgb(0 0 0 / 0.3);
+  transition: transform 90ms ease, box-shadow 90ms ease, border-color 160ms ease, color 160ms ease;
 }
-@keyframes line-rise {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
+.key-pill:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 3px 0 rgb(0 0 0 / 0.55),
+    0 8px 14px rgb(0 0 0 / 0.34);
 }
-.panel-drop {
-  animation: panel-drop 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  transform-origin: 50% 0%;
-}
-.line-rise {
-  animation: line-rise 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-@media (prefers-reduced-motion: reduce) {
-  .panel-drop, .line-rise { animation: none; }
+.key-pill:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 0 0 rgb(0 0 0 / 0.55),
+    0 2px 5px rgb(0 0 0 / 0.3);
 }

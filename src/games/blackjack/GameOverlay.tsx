@@ -64,7 +64,7 @@ export function GameOverlay({
           <button
             type="button"
             onClick={onLeave}
-            className="pointer-events-auto rounded-full border border-[#3a4a40] bg-black/50 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-[#b9c8bd] hover:border-[#c9973f]/60 hover:text-[#efe6d6]"
+            className="key-pill pointer-events-auto rounded-full border border-[#3a4a40] bg-black/50 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-[#b9c8bd] hover:border-[#c9973f]/60 hover:text-[#efe6d6]"
           >
             Stand up
           </button>
@@ -121,7 +121,7 @@ export function GameOverlay({
       )}
 
       {state.phase === 'summary' && (
-        <div className="panel-drop pointer-events-auto mx-auto w-full max-w-lg rounded-2xl border border-[#c9973f]/25 bg-[#07110c] p-5 shadow-2xl">
+        <div className="panel-drop pointer-events-auto mx-auto w-full max-w-lg rounded-sm border border-[#c9973f]/20 bg-[#07110c]/78 p-5 shadow-2xl backdrop-blur-[4px]">
           <div className="line-rise flex items-end justify-between" style={{ animationDelay: '90ms' }}>
             <div>
               <p className="text-[10px] uppercase tracking-[0.3em] text-[#c9973f]">Round complete</p>
