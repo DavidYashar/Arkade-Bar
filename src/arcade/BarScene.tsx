@@ -445,7 +445,7 @@ export function BarScene({
   }, [doorOpen]);
 
   return (
-    <Canvas dpr={[1, 2]} gl={{ antialias: true }} camera={{ position: VIEWS[0]!.position, fov: 60, near: 0.05, far: 400 }}>
+    <Canvas dpr={[1, 2]} gl={{ antialias: true }} camera={{ position: VIEWS[0]!.position, fov: 72, near: 0.05, far: 400 }}>
       <color attach="background" args={['#070d0a']} />
       <fog attach="fog" args={['#070d0a', 20, 55]} />
       <ambientLight intensity={0.55} color="#ffd9a8" />
