@@ -239,7 +239,7 @@ function Blockout() {
     scene.traverse((node) => {
       const mesh = node as Object3D & { isMesh?: boolean };
       if (!mesh.isMesh) return;
-      const hide = ['wall_left', 'wall_right', 'wall_back', 'card_table', 'card_felt'];
+      const hide = ['wall_left', 'wall_right', 'wall_back', 'card_table', 'card_felt', 'floor'];
       if (hide.includes(mesh.name) || mesh.name.startsWith('card_chair')) {
         mesh.visible = false;
       }
@@ -428,14 +428,47 @@ function LabelAnchors() {
 }
 
 
-/** The bar's concrete floor, the only part of the room the game needs. */
+/** The room's walnut floor, one tile every 1.2 m: planks about 20 cm wide. */
+function useFloorTexture(size: [number, number]) {
+  const source = useTexture('/textures/floor-walnut.webp');
+  return useMemo(() => {
+    const texture = source.clone();
+    texture.wrapS = RepeatWrapping;
+    texture.wrapT = RepeatWrapping;
+    texture.repeat.set(size[0] / 1.2, size[1] / 1.2);
+    texture.colorSpace = SRGBColorSpace;
+    texture.anisotropy = 8;
+    texture.needsUpdate = true;
+    return texture;
+  }, [source, size]);
+}
+
+function FloorPlane({ size }: { size: number }) {
+  const map = useFloorTexture(useMemo<[number, number]>(() => [size, size], [size]));
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.002, 2.0]}>
+      <planeGeometry args={[size, size]} />
+      <meshStandardMaterial map={map} roughness={0.5} metalness={0.04} color="#ffffff" />
+    </mesh>
+  );
+}
+
+function BarFloor() {
+  const size = useMemo<[number, number]>(() => [14, 18], []);
+  const map = useFloorTexture(size);
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]}>
+      <planeGeometry args={[size[0], size[1]]} />
+      <meshStandardMaterial map={map} roughness={0.5} metalness={0.04} color="#ffffff" />
+    </mesh>
+  );
+}
+
+/** The bar's own floor, the only part of the room the game needs. */
 function GameFloor() {
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
-        <planeGeometry args={[80, 80]} />
-        <meshStandardMaterial color="#3a3632" roughness={0.55} metalness={0.05} />
-      </mesh>
+      <FloorPlane size={26} />
       <pointLight position={[0, 3.1, 2.0]} intensity={18} distance={9} color="#ffcf9a" />
       <pointLight position={[0, 2.4, 1.1]} intensity={4} distance={6} color="#ffbf73" />
       <pointLight position={[0, 2.4, 2.9]} intensity={4} distance={6} color="#ffbf73" />
@@ -512,6 +545,7 @@ export function BarScene({
           <Doors open={doorOpen} />
           <NeonSign />
           <WoodWalls />
+          <BarFloor />
           <Blockout />
         </>
       )}
