@@ -8,11 +8,15 @@ layout and the camera frames before any wood or neon is modelled for real.
 
 import math
 import pathlib
+import sys
 
 import bpy
 from mathutils import Vector
 
 HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import palm  # noqa: E402  (the local palm builder)
 ROOT = HERE.parent
 MODELS = ROOT / "public" / "models" / "bar"
 ART = pathlib.Path(r"C:\Users\yasha\Deepseek harness Projects\duel-dudes-art")
@@ -286,9 +290,8 @@ def build_exterior():
     # outside: sidewalk and street edge
     plane("sidewalk", (W + 10.0, 6.0), (0, FRONT - 3.0, -0.01), m_concrete)
     box("kerb", (W + 10.0, 0.25, 0.12), (0, FRONT - 6.0, 0.06), m_ink)
-    for i, x in enumerate((-3.2, 3.2)):
-        cyl(f"planter_{i}", 0.36, 0.7, (x, FRONT - 1.0, 0.35), m_ink)
-        sphere(f"palm_{i}", 0.62, (x, FRONT - 1.0, 1.05), material(f"palm_leaf_{i}", (0.08, 0.22, 0.08, 1)))
+    palm.build_palm("palm_left", (-3.2, FRONT - 1.0, 0.0), seed=1)
+    palm.build_palm("palm_right", (3.2, FRONT - 1.0, 0.0), seed=4)
 
 
 def build_lights():
