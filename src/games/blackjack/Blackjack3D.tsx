@@ -6,8 +6,8 @@ import type { Rank } from './strategy';
 import { cardArt, makeSuitDealer, BACK_ART } from './deck';
 import type { BlackjackState } from './useBlackjack';
 
-export const CARD_W = 0.30;
-export const CARD_H = 0.42;
+export const CARD_W = 0.20;
+export const CARD_H = 0.28;
 const TABLE_Y = 0.845;
 
 /** Where a card comes from, and how long it takes to land. */
@@ -98,7 +98,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           rank="A"
           suit="S"
           down
-          target={[0.15, TABLE_Y + 0.003, 0.02]}
+          target={[0.10, TABLE_Y + 0.003, -0.50]}
           delay={0.18}
           tilt={0.03}
         />
@@ -109,7 +109,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           rank={rank}
           suit={suits.dealer[i]!}
           down={state.holeHidden && i > 0}
-          target={[-0.14 + i * 0.30, TABLE_Y + 0.004, 0.02]}
+          target={[-0.10 + i * 0.21, TABLE_Y + 0.004, -0.50]}
           delay={i * 0.09}
           tilt={(i - 1) * 0.03}
         />
@@ -119,7 +119,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           key={`p-${i}`}
           rank={rank}
           suit={suits.player[i]!}
-          target={[-0.15 + i * 0.30, TABLE_Y + 0.006, 0.62]}
+          target={[-0.10 + i * 0.21, TABLE_Y + 0.006, 0.50]}
           delay={0.24 + i * 0.09}
           tilt={(i - 1) * 0.035}
         />

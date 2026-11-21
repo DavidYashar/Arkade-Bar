@@ -43,12 +43,12 @@ export function GameOverlay({
 
       {(state.phase === 'deciding' || state.phase === 'verdict') && (
         <>
-          <div className="pointer-events-none absolute inset-x-0 top-[40%] flex justify-center">
+          <div className="pointer-events-none absolute inset-x-0 flex justify-center" style={{ top: 'var(--label-dealer, 12%)' }}>
             <span className="rounded-full border border-[#c9973f]/30 bg-black/60 px-4 py-1 text-[11px] uppercase tracking-[0.22em] text-[#f0e6cf]">
               Dealer {state.holeHidden ? readHand(state.dealer).total : readHand(state.dealer).total}
             </span>
           </div>
-          <div className="pointer-events-none absolute inset-x-0 top-[59%] flex justify-center">
+          <div className="pointer-events-none absolute inset-x-0 flex justify-center" style={{ top: 'var(--label-player, 81%)' }}>
             <span className="rounded-full border border-[#8ee6b0]/25 bg-black/60 px-4 py-1 text-[11px] uppercase tracking-[0.22em] text-[#d8f5e2]">
               You {readHand(state.player).total}
             </span>

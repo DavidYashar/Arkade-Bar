@@ -54,8 +54,8 @@ function Player({
 
   useFrame((_, delta) => {
     if (seat) {
-      camera.position.set(0, 1.85, 3.95);
-      camera.rotation.set(-0.58, 0, 0, 'YXZ');
+      camera.position.set(0, 2.55, 2.0);
+      camera.rotation.set(-Math.PI / 2, 0, 0, 'YXZ');
       return;
     }
     const step = Math.min(delta, 0.05) * SPEED;
@@ -412,6 +412,20 @@ function WoodWalls() {
   );
 }
 
+
+/** Projects the two card rows so their labels can sit just outside them. */
+function LabelAnchors() {
+  const camera = useThree((s) => s.camera);
+  useFrame(() => {
+    const dealer = new Vector3(0, 0.845, 1.5).project(camera);
+    const player = new Vector3(0, 0.845, 2.5).project(camera);
+    const top = (v: Vector3) => (1 - (v.y * 0.5 + 0.5)) * 100;
+    document.documentElement.style.setProperty('--label-dealer', `${top(dealer) - 9}%`);
+    document.documentElement.style.setProperty('--label-player', `${top(player) + 6}%`);
+  });
+  return null;
+}
+
 function DebugScene() {
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
@@ -471,6 +485,7 @@ export function BarScene({
       <BlackjackCards state={blackjack} />
       <Doors open={doorOpen} />
       <SkyStars />
+      <LabelAnchors />
       <NeonSign />
       <WoodWalls />
       <Blockout />
