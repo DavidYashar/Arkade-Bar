@@ -435,9 +435,9 @@ function GameFloor() {
         <planeGeometry args={[80, 80]} />
         <meshStandardMaterial color="#3a3632" roughness={0.55} metalness={0.05} />
       </mesh>
-      <pointLight position={[0, 3.1, 2.0]} intensity={22} distance={9} color="#ffcf9a" />
-      <pointLight position={[0, 2.4, 1.1]} intensity={5} distance={6} color="#ffbf73" />
-      <pointLight position={[0, 2.4, 2.9]} intensity={5} distance={6} color="#ffbf73" />
+      <pointLight position={[0, 3.1, 2.0]} intensity={18} distance={9} color="#ffcf9a" />
+      <pointLight position={[0, 2.4, 1.1]} intensity={4} distance={6} color="#ffbf73" />
+      <pointLight position={[0, 2.4, 2.9]} intensity={4} distance={6} color="#ffbf73" />
       <pointLight position={[-2.6, 2.0, 2.0]} intensity={3} distance={6} color="#ff3fae" />
       <pointLight position={[2.6, 2.0, 2.0]} intensity={3} distance={6} color="#35d8ff" />
     </group>

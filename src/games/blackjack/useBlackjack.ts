@@ -75,7 +75,7 @@ export function useBlackjack() {
     shownAt.current = performance.now();
     // four cards leave the shoe as the hand is dealt
     for (let i = 0; i < 4; i += 1) {
-      const id = window.setTimeout(() => playDeal(0.65), 120 + i * 110);
+      const id = window.setTimeout(() => playDeal(0.6), 60 + i * 160);
       timers.current.push(id);
     }
     // The hole is the card the dealer is dealt face down: the hand's second card.

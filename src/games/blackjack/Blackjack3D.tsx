@@ -18,7 +18,7 @@ const TABLE_Y = 0.862;
 
 /** Where a card comes from, and how long it takes to land. */
 const SHOE: [number, number, number] = [0.95, 0.95, 0.05];
-const DEAL_S = 0.24;
+const DEAL_S = 0.32;
 
 export function BlackjackTable() {
   const gltf = useGLTF('/models/bar/table.glb');
@@ -147,7 +147,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           rank={state.dealer[0]}
           suit={suits.dealer[0]!}
           target={slot(0, -0.50)}
-          delay={0}
+          delay={0.16}
           tilt={-0.03}
         />
       )}
@@ -156,7 +156,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
         suit={holeSuit}
         down={state.holeHidden}
         target={slot(1, -0.50)}
-        delay={0.09}
+        delay={0.48}
         tilt={0.03}
       />
       {state.dealer.slice(2).map((rank, i) => (
@@ -165,7 +165,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           rank={rank}
           suit={suits.dealer[i + 2]!}
           target={slot(i + 2, -0.50)}
-          delay={i * 0.06}
+          delay={0.62 + i * 0.16}
           tilt={(i - 1) * 0.03}
         />
       ))}
@@ -175,7 +175,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           rank={rank}
           suit={suits.player[i]!}
           target={slot(i, 0.50)}
-          delay={0.18 + i * 0.07}
+          delay={i === 0 ? 0 : 0.32 + (i - 1) * 0.16}
           tilt={(i % 2 === 0 ? -1 : 1) * 0.03}
         />
       ))}

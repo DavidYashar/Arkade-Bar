@@ -92,7 +92,7 @@ def build():
     wood = image_material("rail_wood", TEX / "wood-rail.png", roughness=0.42, repeat=8)
     leather = plain_material("rail_leather", (0.34, 0.18, 0.10, 1), 0.45)
     dark = plain_material("table_dark", (0.10, 0.07, 0.05, 1), 0.55)
-    brass = plain_material("brass", (0.62, 0.46, 0.16, 1), 0.28, metallic=1.0)
+    brass = plain_material("brass", (0.30, 0.22, 0.09, 1), 0.45, metallic=0.6)
 
     # pedestal, turned: three stacked rings
     cylinder("foot", 0.46, 0.40, 0.06, (0, 0, 0.03), dark)
