@@ -1,4 +1,5 @@
 import { readHand } from './strategy';
+import { POINTS, roundTotal } from './score';
 import type { BlackjackState } from './useBlackjack';
 
 const clock = (seconds: number) => {
@@ -8,9 +9,9 @@ const clock = (seconds: number) => {
 
 const LABEL: Record<string, string> = {
   blackjack: 'Blackjack',
-  win: 'You win',
-  lose: 'You lose',
-  push: 'Push',
+  win: 'Win',
+  lose: 'Loss',
+  push: 'Draw',
 };
 
 const TONE: Record<string, string> = {
@@ -19,6 +20,13 @@ const TONE: Record<string, string> = {
   lose: 'text-[#e08a7a]',
   push: 'text-[#c8d4ca]',
 };
+
+const RULES: Array<[string, number]> = [
+  ['Blackjack', POINTS.blackjack],
+  ['Dealer busts', POINTS.dealerBust],
+  ['Win', POINTS.win],
+  ['Draw', POINTS.draw],
+];
 
 export function GameOverlay({
   state,
@@ -32,12 +40,13 @@ export function GameOverlay({
   onRestart: () => void;
 }) {
   const results = state.results;
-  const played = results.filter(Boolean);
-  const count = (kind: string) => played.filter((r) => r === kind).length;
+  const played = results.filter((r): r is NonNullable<typeof r> => Boolean(r));
+  const count = (kind: string) => played.filter((r) => r.outcome === kind).length;
   const wins = count('win');
   const losses = count('lose');
-  const pushes = count('push');
+  const draws = count('push');
   const naturals = count('blackjack');
+  const total = roundTotal(results);
 
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 sm:p-6">
@@ -51,6 +60,7 @@ export function GameOverlay({
 
         <div className="flex items-center gap-4">
           <p className="text-sm tabular-nums text-[#efe6d6]">{clock(state.remaining)}</p>
+          <p className="text-sm tabular-nums text-[#c9973f]">{total} pts</p>
           <button
             type="button"
             onClick={onLeave}
@@ -83,15 +93,6 @@ export function GameOverlay({
         </>
       )}
 
-      {state.phase === 'verdict' && state.outcome && (
-        <div className="pointer-events-none mx-auto rounded-2xl border border-[#c9973f]/30 bg-black/70 px-8 py-3 text-center">
-          <p className={`text-2xl tracking-[0.06em] ${TONE[state.outcome]}`}>{LABEL[state.outcome]}</p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.22em] text-[#9fb5a7]">
-            Dealer {readHand(state.dealer).total} · You {readHand(state.player).total}
-          </p>
-        </div>
-      )}
-
       {state.phase === 'deciding' && (
         <div className="mx-auto flex w-full max-w-2xl flex-wrap justify-center gap-2">
           <button type="button" onClick={() => onAnswer('hit')} className="key key-cream pointer-events-auto">
@@ -121,25 +122,42 @@ export function GameOverlay({
 
       {state.phase === 'summary' && (
         <div className="pointer-events-auto mx-auto w-full max-w-lg rounded-2xl border border-[#c9973f]/25 bg-[#07110c] p-5 shadow-2xl">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-[#c9973f]">Round complete</p>
-          <p className="mt-2 text-3xl tracking-[0.04em] text-[#efe6d6]">
-            {wins + naturals}
-            <span className="ml-1 text-sm text-[#8fa697]">of {state.hands} won</span>
-          </p>
-          <p className="mt-1 text-[12px] text-[#9fb5a7]">
-            {naturals} blackjack{naturals === 1 ? '' : 's'} · {wins} won · {losses} lost · {pushes} pushed
-          </p>
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-[#c9973f]">Round complete</p>
+              <p className="mt-1 text-4xl tracking-[0.04em] text-[#efe6d6]">
+                {total}
+                <span className="ml-1 text-sm text-[#8fa697]">pts</span>
+              </p>
+            </div>
+            <p className="text-right text-[12px] leading-5 text-[#9fb5a7]">
+              {naturals} blackjack{naturals === 1 ? '' : 's'}
+              <br />
+              {wins} won · {losses} lost · {draws} drawn
+            </p>
+          </div>
+
           <ul className="mt-4 space-y-1">
-            {state.results.map((result, i) => (
+            {state.results.map((hand, i) => (
               <li key={i} className="flex items-center justify-between text-[12px] text-[#c8d4ca]">
                 <span>Hand {i + 1}</span>
-                <span className={result ? TONE[result] : 'text-[#7f9587]'}>
-                  {result ? LABEL[result] : '—'}
+                <span className="flex items-center gap-3">
+                  <span className={hand ? TONE[hand.outcome] : 'text-[#7f9587]'}>
+                    {hand ? LABEL[hand.outcome] : '—'}
+                  </span>
+                  <span className="w-8 text-right tabular-nums text-[#9fb5a7]">
+                    {hand ? `+${hand.points}` : '—'}
+                  </span>
                 </span>
               </li>
             ))}
           </ul>
-          <div className="mt-5 flex gap-2">
+
+          <p className="mt-4 border-t border-[#1d2a22] pt-3 text-[10px] uppercase tracking-[0.16em] text-[#7f9587]">
+            {RULES.map(([name, value]) => `${name} ${value}`).join(' · ')}
+          </p>
+
+          <div className="mt-4 flex gap-2">
             <button type="button" onClick={onRestart} className="key key-gold flex-1">
               Deal again
             </button>

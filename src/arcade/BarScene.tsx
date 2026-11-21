@@ -7,6 +7,7 @@ import type { View } from './views';
 import { VIEWS } from './views';
 import { blocked, insideBounds, DOOR_AT } from './colliders';
 import { BlackjackCards, BlackjackTable } from '@/games/blackjack/Blackjack3D';
+import { TableResult } from '@/games/blackjack/TableResult';
 import type { BlackjackState } from '@/games/blackjack/useBlackjack';
 
 const EYE = 1.68;
@@ -520,6 +521,7 @@ export function BarScene({
           <Suspense fallback={null}>
             <BlackjackCards state={blackjack} />
           </Suspense>
+          <TableResult outcome={blackjack.phase === 'verdict' ? blackjack.outcome : null} />
         </>
       )}
     </Canvas>

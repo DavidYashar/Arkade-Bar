@@ -12,6 +12,7 @@ import {
 import { readHand, type Action, type Rank } from './strategy';
 import { playPlace } from '@/lib/sfx';
 import { DEAL_S, playerDelay } from './Blackjack3D';
+import { pointsFor, type HandScore } from './score';
 
 export type Phase = 'idle' | 'deciding' | 'dealer' | 'verdict' | 'summary';
 
@@ -30,7 +31,7 @@ export type BlackjackState = {
   /** The hand just settled, or null while it is being played. */
   outcome: Outcome | null;
   /** One entry per hand played so far. */
-  results: readonly (Outcome | null)[];
+  results: readonly (HandScore | null)[];
   seed: string;
 };
 
@@ -61,7 +62,7 @@ export function useBlackjack() {
   useEffect(() => () => clearTimers(), [clearTimers]);
 
   const handState = useCallback(
-    (index: number, results: readonly (Outcome | null)[]): BlackjackState => {
+    (index: number, results: readonly (HandScore | null)[]): BlackjackState => {
       const hand = script.current[index]!;
       return {
         ...empty,
@@ -102,9 +103,10 @@ export function useBlackjack() {
       const step = (i: number) => {
         if (i >= all.length) {
           const outcome: Outcome = busted ? 'lose' : outcomeOf(cards, total, busted, dealer);
+          const dealerBust = readHand(all).total > 21;
           setState((s) => {
             const results = [...s.results];
-            results[index] = outcome;
+            results[index] = { outcome, points: pointsFor(outcome, dealerBust) };
             return { ...s, phase: 'verdict', dealer: all, holeHidden: false, outcome, results };
           });
           const id = window.setTimeout(() => {
