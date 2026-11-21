@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { useTexture } from '@react-three/drei';
+import { useGLTF, useTexture } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import type { Mesh } from 'three';
 import type { Rank } from './strategy';
@@ -8,34 +8,18 @@ import type { BlackjackState } from './useBlackjack';
 
 export const CARD_W = 0.20;
 export const CARD_H = 0.28;
-const TABLE_Y = 0.845;
+const TABLE_Y = 0.862;
 
 /** Where a card comes from, and how long it takes to land. */
 const SHOE: [number, number, number] = [0.95, 0.95, 0.05];
 const DEAL_S = 0.3;
 
 export function BlackjackTable() {
-  return (
-    <group position={[0, 0, 2.0]}>
-      <mesh position={[0, 0.36, 0]}>
-        <cylinderGeometry args={[0.34, 0.46, 0.72, 24]} />
-        <meshStandardMaterial color="#1a1410" roughness={0.6} metalness={0.2} />
-      </mesh>
-      <mesh position={[0, 0.74, 0]}>
-        <cylinderGeometry args={[1.32, 1.42, 0.10, 48]} />
-        <meshStandardMaterial color="#2a1c12" roughness={0.55} metalness={0.1} />
-      </mesh>
-      <mesh position={[0, 0.80, 0]}>
-        <cylinderGeometry args={[1.22, 1.22, 0.03, 48]} />
-        <meshStandardMaterial color="#0b3f2a" roughness={0.95} />
-      </mesh>
-      <mesh position={[0, 0.815, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.95, 48]} />
-        <meshStandardMaterial color="#093524" roughness={0.95} />
-      </mesh>
-    </group>
-  );
+  const gltf = useGLTF('/models/bar/table.glb');
+  return <primitive object={gltf.scene} position={[0, 0, 2.0]} />;
 }
+
+useGLTF.preload('/models/bar/table.glb');
 
 function Card({
   rank,
