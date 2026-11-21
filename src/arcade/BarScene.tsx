@@ -236,7 +236,18 @@ function Blockout() {
 }
 
 
-/** The neon above the door: drawn once into a canvas, then blinked. */
+/** Pixel glyphs, so the neon reads as an arcade marquee rather than a web font. */
+const GLYPHS: Record<string, string[]> = {
+  A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
+  R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+  K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
+  D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
+  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+  B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
+  ' ': ['000', '000', '000', '000', '000', '000', '000'],
+};
+
+/** The neon above the door: pixel letters drawn into a canvas, then blinked. */
 function NeonSign() {
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas');
@@ -245,23 +256,42 @@ function NeonSign() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.font = '900 148px "Arial Narrow", "Segoe UI", Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
 
-    const draw = (blur: number, color: string) => {
-      ctx.shadowColor = 'rgba(255, 160, 60, 0.95)';
+    const text = 'ARKADE BAR';
+    const gap = 1;
+    const units = [...text].reduce((sum, ch) => sum + (GLYPHS[ch]?.[0]?.length ?? 3) + gap, 0) - gap;
+    const pixel = Math.min(20, Math.floor((canvas.width * 0.88) / units));
+    const width = units * pixel;
+    const height = 7 * pixel;
+    const x0 = (canvas.width - width) / 2;
+    const y0 = (canvas.height - height) / 2;
+
+    const pixelRect = (x: number, y: number, color: string, blur: number, inset: number) => {
+      ctx.shadowColor = 'rgba(255, 150, 50, 0.95)';
       ctx.shadowBlur = blur;
       ctx.fillStyle = color;
-      ctx.fillText('ARKADE BAR', 512, 136);
+      const s = pixel - inset * 2;
+      ctx.beginPath();
+      ctx.roundRect(x + inset, y + inset, s, s, 2);
+      ctx.fill();
     };
 
-    draw(64, '#ff9a3c');
-    draw(40, '#ffbe73');
-    draw(18, '#ffe4bd');
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#fff8ec';
-    ctx.fillText('ARKADE BAR', 512, 136);
+    let cursor = x0;
+    for (const ch of text) {
+      const glyph = GLYPHS[ch] ?? GLYPHS[' ']!;
+      for (let row = 0; row < 7; row += 1) {
+        const line = glyph[row] ?? '';
+        for (let col = 0; col < line.length; col += 1) {
+          if (line[col] !== '1') continue;
+          const px = cursor + col * pixel;
+          const py = y0 + row * pixel;
+          pixelRect(px, py, '#ff9a3c', 42, 2);
+          pixelRect(px, py, '#ffd9a8', 18, 2);
+          pixelRect(px, py, '#fff6e6', 0, 3);
+        }
+      }
+      cursor += (glyph[0]?.length ?? 3) * pixel + gap * pixel;
+    }
 
     const tex = new CanvasTexture(canvas);
     tex.anisotropy = 4;
@@ -276,7 +306,6 @@ function NeonSign() {
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
-    // A steady hum, a slow pulse, and the occasional dip of a real tube.
     const hum = 0.88 + 0.07 * Math.sin(t * 9.1) + 0.04 * Math.sin(t * 27.7);
     const dip = Math.sin(t * 1.7) > 0.995 || Math.sin(t * 2.31) > 0.997 ? 0.35 : 1;
     if (material.current) material.current.opacity = hum * dip;
@@ -303,7 +332,6 @@ function NeonSign() {
     </group>
   );
 }
-
 
 function WoodWalls() {
   const wood = useTexture('/textures/wood-wall.png');
