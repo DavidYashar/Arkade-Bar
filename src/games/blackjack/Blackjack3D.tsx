@@ -3,7 +3,7 @@ import { useGLTF, useTexture } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import type { Group, Mesh } from 'three';
 import type { Rank } from './strategy';
-import { cardArt, makeSuitDealer, BACK_ART, SUITS } from './deck';
+import { cardArt, dealSuits, BACK_ART, SUITS } from './deck';
 import type { BlackjackState } from './useBlackjack';
 import { playDeal } from '@/lib/sfx';
 
@@ -142,13 +142,15 @@ function slot(index: number, baseZ: number): [number, number, number] {
 }
 
 export function BlackjackCards({ state }: { state: BlackjackState }) {
+  // Each side is dealt its own faces, keyed by seed, hand and position, so a hit can
+  // never repaint the dealer's up card.
   const suits = useMemo(() => {
-    const dealer = makeSuitDealer(state.seed || 'seed');
+    const seed = state.seed || 'seed';
     return {
-      player: state.player.map((rank) => dealer.next(rank)),
-      dealer: state.dealer.map((rank) => dealer.next(rank)),
+      dealer: dealSuits(seed, state.index, state.dealer, 0).map((card) => card.suit),
+      player: dealSuits(seed, state.index, state.player, 7).map((card) => card.suit),
     };
-  }, [state.seed, state.player, state.dealer]);
+  }, [state.seed, state.index, state.player, state.dealer]);
 
   if (state.phase === 'idle') return null;
 
