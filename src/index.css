@@ -86,3 +86,10 @@ body {
     0 0 0 rgb(0 0 0 / 0.55),
     0 2px 5px rgb(0 0 0 / 0.3);
 }
+
+
+/* The pinball cabinet's display face. */
+.font-display {
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  letter-spacing: 0.03em;
+}
