@@ -3,16 +3,13 @@ import {
   V0,
   dealerTurn,
   drawPlayer,
-  gradeRound,
   handScript,
   isNatural,
   outcomeOf,
   type DealtHand,
-  type LoggedDecision,
   type Outcome,
-  type RoundResult,
 } from './round';
-import { isCorrect, readHand, type Action, type Rank } from './strategy';
+import { readHand, type Action, type Rank } from './strategy';
 import { playPlace } from '@/lib/sfx';
 import { DEAL_S, playerDelay } from './Blackjack3D';
 
@@ -30,11 +27,10 @@ export type BlackjackState = {
   dealer: readonly Rank[];
   holeHidden: boolean;
   remaining: number;
-  verdict: boolean | null;
+  /** The hand just settled, or null while it is being played. */
   outcome: Outcome | null;
-  result: RoundResult | null;
-  canDouble: boolean;
-  canSplit: boolean;
+  /** One entry per hand played so far. */
+  results: readonly (Outcome | null)[];
   seed: string;
 };
 
@@ -46,11 +42,8 @@ const empty: BlackjackState = {
   dealer: [],
   holeHidden: true,
   remaining: V0.secondsPerHand,
-  verdict: null,
   outcome: null,
-  result: null,
-  canDouble: true,
-  canSplit: false,
+  results: [],
   seed: '',
 };
 
@@ -58,10 +51,7 @@ export function useBlackjack() {
   const [state, setState] = useState<BlackjackState>(empty);
   const seed = useRef('');
   const script = useRef<DealtHand[]>([]);
-  const decisions = useRef<Array<LoggedDecision | null>>([]);
-  const shownAt = useRef(0);
   const timers = useRef<number[]>([]);
-  const hole = useRef<Rank>('A');
 
   const clearTimers = useCallback(() => {
     timers.current.forEach((id) => window.clearTimeout(id));
@@ -70,66 +60,60 @@ export function useBlackjack() {
 
   useEffect(() => () => clearTimers(), [clearTimers]);
 
-  const beginHand = useCallback((index: number) => {
-    const hand = script.current[index];
-    if (!hand) return;
-    shownAt.current = performance.now();
-    // The hole is the card the dealer is dealt face down: the hand's second card.
-    const cards = [...hand.cards, ...[]];
-    hole.current = cards[0] ?? 'A';
-    setState({
-      ...empty,
-      phase: 'deciding',
-      index,
-      hands: script.current.length,
-      player: hand.cards,
-      dealer: [hand.dealerUp],
-      holeHidden: true,
-      remaining: V0.secondsPerHand,
-      canDouble: true,
-      canSplit: false,
-      seed: seed.current,
-    });
-  }, []);
-
-  const finish = useCallback((logged: Array<LoggedDecision | null>) => {
-    const result = gradeRound(script.current, logged, V0);
-    setState((s) => ({ ...s, phase: 'summary', result }));
-  }, []);
-
-  const next = useCallback(
-    (logged: Array<LoggedDecision | null>, index: number) => {
-      if (index + 1 >= script.current.length) finish(logged);
-      else beginHand(index + 1);
+  const handState = useCallback(
+    (index: number, results: readonly (Outcome | null)[]): BlackjackState => {
+      const hand = script.current[index]!;
+      return {
+        ...empty,
+        phase: 'deciding',
+        index,
+        hands: script.current.length,
+        player: hand.cards,
+        dealer: [hand.dealerUp],
+        holeHidden: true,
+        remaining: V0.secondsPerHand,
+        results,
+        seed: seed.current,
+      };
     },
-    [beginHand, finish],
+    [],
   );
 
-  /** The dealer turns its hole card, draws while under 17, then the hand is judged. */
+  /** The dealer turns its hole card, draws while under 17, then the hand is settled. */
   const dealerPlays = useCallback(
-    (index: number, cards: Rank[], action: Action | null, correct: boolean | null, startDelayMs = REVEAL_HOLE_MS) => {
+    (index: number, cards: Rank[], startDelayMs = REVEAL_HOLE_MS) => {
       const deal = script.current[index];
       if (!deal) return;
       const total = readHand(cards).total;
       const busted = total > 21;
       const dealer = dealerTurn(seed.current, index, deal, busted);
       const all = dealer.cards;
-      const logged = decisions.current;
 
-      setState((s) => ({ ...s, phase: 'dealer', player: cards, dealer: [all[0]!], holeHidden: true, verdict: null, remaining: 0 }));
+      setState((s) => ({
+        ...s,
+        phase: 'dealer',
+        player: cards,
+        dealer: [all[0]!],
+        holeHidden: true,
+        outcome: null,
+        remaining: 0,
+      }));
 
       const step = (i: number) => {
         if (i >= all.length) {
-          const outcome = busted ? 'lose' : outcomeOf(cards, total, busted, dealer);
-          setState((s) => ({
-            ...s,
-            phase: 'verdict',
-            dealer: all,
-            holeHidden: false,
-            verdict: correct,
-            outcome,
-          }));
-          const id = window.setTimeout(() => next(logged, index), VERDICT_MS);
+          const outcome: Outcome = busted ? 'lose' : outcomeOf(cards, total, busted, dealer);
+          setState((s) => {
+            const results = [...s.results];
+            results[index] = outcome;
+            return { ...s, phase: 'verdict', dealer: all, holeHidden: false, outcome, results };
+          });
+          const id = window.setTimeout(() => {
+            setState((s) =>
+              index + 1 >= script.current.length
+                ? { ...s, phase: 'summary' }
+                : handState(index + 1, s.results),
+            );
+          }, VERDICT_MS);
           timers.current.push(id);
           return;
         }
@@ -146,7 +130,7 @@ export function useBlackjack() {
       const id = window.setTimeout(() => step(1), startDelayMs);
       timers.current.push(id);
     },
-    [next],
+    [handState],
   );
 
   const resolve = useCallback(
@@ -154,26 +138,24 @@ export function useBlackjack() {
       const index = state.index;
       const hand = script.current[index];
       if (!hand || state.phase !== 'deciding') return;
-      const logged = decisions.current;
-      if (logged[index] === null) {
-        logged[index] = { atMs: performance.now() - shownAt.current, taken: action };
-      }
 
       if (action === 'hit') {
-        const drawn = drawPlayer(seed.current, index, state.player.length);
-        const cards = [...state.player, drawn];
+        const cards = [...state.player, drawPlayer(seed.current, index, state.player.length)];
         if (readHand(cards).total > 21) {
-          // a bust: the dealer turns over once the card has landed, not a moment sooner
+          // the dealer turns once the busting card has landed
           const landedMs = (playerDelay(cards.length - 1) + DEAL_S) * 1000 + 25;
-          dealerPlays(index, cards, 'hit', isCorrect(hand.cards, hand.dealerUp, 'hit'), landedMs);
+          dealerPlays(index, cards, landedMs);
         } else {
           setState((s) => ({ ...s, player: cards }));
         }
         return;
       }
 
-      const cards: Rank[] = action === 'double' ? [...state.player, drawPlayer(seed.current, index, 1)] : [...state.player];
-      dealerPlays(index, cards, action, isCorrect(hand.cards, hand.dealerUp, action));
+      const cards: Rank[] =
+        action === 'double'
+          ? [...state.player, drawPlayer(seed.current, index, 1)]
+          : [...state.player];
+      dealerPlays(index, cards);
     },
     [state.index, state.phase, state.player, dealerPlays],
   );
@@ -183,16 +165,15 @@ export function useBlackjack() {
     const stamp = `${Date.now()}`;
     seed.current = stamp;
     script.current = handScript(stamp, V0);
-    decisions.current = new Array(script.current.length).fill(null);
-    beginHand(0);
-  }, [beginHand, clearTimers]);
+    setState(handState(0, []));
+  }, [handState, clearTimers]);
 
   const leave = useCallback(() => {
     clearTimers();
     setState(empty);
   }, [clearTimers]);
 
-  // the clock runs while a decision is open
+  // the clock runs while a decision is open; when it runs out the hand stands
   useEffect(() => {
     if (state.phase !== 'deciding') return;
     const started = performance.now();
@@ -201,13 +182,11 @@ export function useBlackjack() {
       setState((s) => (s.phase === 'deciding' ? { ...s, remaining: left } : s));
       if (left <= 0) {
         window.clearInterval(id);
-        const index = state.index;
-        decisions.current[index] = null;
-        dealerPlays(index, [...state.player], null, null);
+        resolve('stand');
       }
     }, 100);
     return () => window.clearInterval(id);
-  }, [state.phase, state.index, state.player, dealerPlays]);
+  }, [state.phase, state.index, resolve]);
 
   return {
     state,
