@@ -435,9 +435,11 @@ function GameFloor() {
         <planeGeometry args={[80, 80]} />
         <meshStandardMaterial color="#3a3632" roughness={0.55} metalness={0.05} />
       </mesh>
-      <pointLight position={[0, 3.2, 1.0]} intensity={26} distance={9} color="#ffbf73" />
-      <pointLight position={[-2.4, 2.2, 3.4]} intensity={8} distance={7} color="#ff3fae" />
-      <pointLight position={[2.4, 2.2, 0.4]} intensity={8} distance={7} color="#35d8ff" />
+      <pointLight position={[0, 3.1, 2.0]} intensity={22} distance={9} color="#ffcf9a" />
+      <pointLight position={[0, 2.4, 1.1]} intensity={5} distance={6} color="#ffbf73" />
+      <pointLight position={[0, 2.4, 2.9]} intensity={5} distance={6} color="#ffbf73" />
+      <pointLight position={[-2.6, 2.0, 2.0]} intensity={3} distance={6} color="#ff3fae" />
+      <pointLight position={[2.6, 2.0, 2.0]} intensity={3} distance={6} color="#35d8ff" />
     </group>
   );
 }
@@ -480,14 +482,18 @@ export function BarScene({
       <fog attach="fog" args={['#070d0a', 20, 55]} />
       <ambientLight intensity={0.55} color="#ffd9a8" />
       <hemisphereLight args={['#ffcf9a', '#0a1a12', 0.5]} />
-      <pointLight position={[0, 3.6, 6.5]} intensity={22} distance={16} color="#ffbf73" />
-      <pointLight position={[0, 3.6, -3.0]} intensity={16} distance={14} color="#ffbf73" />
-      <pointLight position={[-5.6, 2.6, -0.6]} intensity={10} distance={10} color="#ff3fae" />
-      <pointLight position={[5.6, 2.6, -1.4]} intensity={10} distance={10} color="#35d8ff" />
-      <pointLight position={[0, 4.2, 13.5]} intensity={18} distance={14} color="#ffbf73" />
-      {/* symmetric pair: the entrance must read the same on both sides */}
-      <pointLight position={[-3.4, 2.6, 6.6]} intensity={10} distance={11} color="#ffbf73" />
-      <pointLight position={[3.4, 2.6, 6.6]} intensity={10} distance={11} color="#ffbf73" />
+      {!seat && (
+        <>
+          <pointLight position={[0, 3.6, 6.5]} intensity={22} distance={16} color="#ffbf73" />
+          <pointLight position={[0, 3.6, -3.0]} intensity={16} distance={14} color="#ffbf73" />
+          <pointLight position={[-5.6, 2.6, -0.6]} intensity={10} distance={10} color="#ff3fae" />
+          <pointLight position={[5.6, 2.6, -1.4]} intensity={10} distance={10} color="#35d8ff" />
+          <pointLight position={[0, 4.2, 13.5]} intensity={18} distance={14} color="#ffbf73" />
+          {/* symmetric pair: the entrance must read the same on both sides */}
+          <pointLight position={[-3.4, 2.6, 6.6]} intensity={10} distance={11} color="#ffbf73" />
+          <pointLight position={[3.4, 2.6, 6.6]} intensity={10} distance={11} color="#ffbf73" />
+        </>
+      )}
       <DebugScene />
       <Player
         view={view}
