@@ -1,14 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useTexture } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import type { Mesh } from 'three';
 import type { Rank } from './strategy';
 import { cardArt, makeSuitDealer, BACK_ART } from './deck';
 import type { BlackjackState } from './useBlackjack';
 
-const CARD_W = 0.255;
-const CARD_H = 0.36;
-const TABLE_Y = 0.835;
+export const CARD_W = 0.30;
+export const CARD_H = 0.42;
+const TABLE_Y = 0.845;
 
-/** The blackjack table itself: felt, rail, pedestal. It replaces the grey box. */
+/** Where a card comes from, and how long it takes to land. */
+const SHOE: [number, number, number] = [0.95, 0.95, 0.05];
+const DEAL_S = 0.3;
+
 export function BlackjackTable() {
   return (
     <group position={[0, 0, 2.0]}>
@@ -36,19 +41,39 @@ function Card({
   rank,
   suit,
   down,
-  position,
+  target,
+  delay,
   tilt,
 }: {
   rank: Rank;
   suit: 'S' | 'H' | 'D' | 'C';
   down?: boolean;
-  position: [number, number, number];
+  target: [number, number, number];
+  delay: number;
   tilt?: number;
 }) {
   const url = down ? BACK_ART : (cardArt({ rank, suit }) ?? BACK_ART);
   const texture = useTexture(url);
+  const mesh = useRef<Mesh>(null);
+  const startedAt = useRef<number | null>(null);
+
+  useFrame((state) => {
+    const node = mesh.current;
+    if (!node) return;
+    if (startedAt.current === null) startedAt.current = state.clock.elapsedTime + delay;
+    const t = Math.min(1, Math.max(0, (state.clock.elapsedTime - startedAt.current) / DEAL_S));
+    const eased = 1 - (1 - t) ** 3;
+
+    node.position.set(
+      SHOE[0] + (target[0] - SHOE[0]) * eased,
+      SHOE[1] + (target[1] - SHOE[1]) * eased + Math.sin(Math.PI * t) * 0.07,
+      SHOE[2] + (target[2] - SHOE[2]) * eased,
+    );
+    node.rotation.z = (tilt ?? 0) + (1 - eased) * 0.35;
+  });
+
   return (
-    <mesh position={position} rotation={[-Math.PI / 2, 0, tilt ?? 0]}>
+    <mesh ref={mesh} position={SHOE} rotation={[-Math.PI / 2, 0, tilt ?? 0]}>
       <planeGeometry args={[CARD_W, CARD_H]} />
       <meshStandardMaterial map={texture} roughness={0.5} metalness={0.02} />
     </mesh>
@@ -68,9 +93,15 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
 
   return (
     <group position={[0, 0, 2.0]}>
-      {/* dealer, far side: the up card, then a face-down hole until the settle */}
       {state.holeHidden && (
-        <Card rank={'A'} suit={'S'} down position={[0.17, TABLE_Y + 0.003, -0.32]} tilt={0.02} />
+        <Card
+          rank="A"
+          suit="S"
+          down
+          target={[0.15, TABLE_Y + 0.003, 0.02]}
+          delay={0.18}
+          tilt={0.03}
+        />
       )}
       {state.dealer.map((rank, i) => (
         <Card
@@ -78,21 +109,21 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           rank={rank}
           suit={suits.dealer[i]!}
           down={state.holeHidden && i > 0}
-          position={[-0.17 + i * 0.34, TABLE_Y + 0.002 + i * 0.001, -0.32]}
+          target={[-0.14 + i * 0.30, TABLE_Y + 0.004, 0.02]}
+          delay={i * 0.09}
           tilt={(i - 1) * 0.03}
         />
       ))}
-      {/* the player, near side */}
       {state.player.map((rank, i) => (
         <Card
           key={`p-${i}`}
           rank={rank}
           suit={suits.player[i]!}
-          position={[-0.17 + i * 0.34, TABLE_Y + 0.004 + i * 0.001, 0.30]}
+          target={[-0.15 + i * 0.30, TABLE_Y + 0.006, 0.62]}
+          delay={0.24 + i * 0.09}
           tilt={(i - 1) * 0.035}
         />
       ))}
     </group>
   );
 }
-

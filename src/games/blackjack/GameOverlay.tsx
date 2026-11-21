@@ -1,3 +1,4 @@
+import { readHand } from './strategy';
 import type { BlackjackState } from './useBlackjack';
 
 const clock = (seconds: number) => {
@@ -39,6 +40,21 @@ export function GameOverlay({
           </button>
         </div>
       </div>
+
+      {(state.phase === 'deciding' || state.phase === 'verdict') && (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 top-[40%] flex justify-center">
+            <span className="rounded-full border border-[#c9973f]/30 bg-black/60 px-4 py-1 text-[11px] uppercase tracking-[0.22em] text-[#f0e6cf]">
+              Dealer {state.holeHidden ? readHand(state.dealer).total : readHand(state.dealer).total}
+            </span>
+          </div>
+          <div className="pointer-events-none absolute inset-x-0 top-[59%] flex justify-center">
+            <span className="rounded-full border border-[#8ee6b0]/25 bg-black/60 px-4 py-1 text-[11px] uppercase tracking-[0.22em] text-[#d8f5e2]">
+              You {readHand(state.player).total}
+            </span>
+          </div>
+        </>
+      )}
 
       {state.phase === 'verdict' && (
         <div className="pointer-events-none mx-auto rounded-2xl border border-[#c9973f]/30 bg-black/70 px-6 py-3 text-center">
