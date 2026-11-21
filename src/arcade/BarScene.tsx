@@ -54,7 +54,7 @@ function Player({
 
   useFrame((_, delta) => {
     if (seat) {
-      camera.position.set(0, 2.55, 2.0);
+      camera.position.set(0, 2.15, 2.0);
       camera.rotation.set(-Math.PI / 2, 0, 0, 'YXZ');
       return;
     }
