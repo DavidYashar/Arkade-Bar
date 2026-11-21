@@ -4,8 +4,8 @@ import type { Rank } from './strategy';
 import { cardArt, makeSuitDealer, BACK_ART } from './deck';
 import type { BlackjackState } from './useBlackjack';
 
-const CARD_W = 0.31;
-const CARD_H = 0.44;
+const CARD_W = 0.255;
+const CARD_H = 0.36;
 const TABLE_Y = 0.835;
 
 /** The blackjack table itself: felt, rail, pedestal. It replaces the grey box. */

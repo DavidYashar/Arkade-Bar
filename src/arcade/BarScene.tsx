@@ -54,8 +54,8 @@ function Player({
 
   useFrame((_, delta) => {
     if (seat) {
-      camera.position.set(0, 1.62, 4.05);
-      camera.rotation.set(-0.35, 0, 0, 'YXZ');
+      camera.position.set(0, 1.45, 3.28);
+      camera.rotation.set(-0.46, 0, 0, 'YXZ');
       return;
     }
     const step = Math.min(delta, 0.05) * SPEED;
@@ -445,7 +445,7 @@ export function BarScene({
   }, [doorOpen]);
 
   return (
-    <Canvas dpr={[1, 2]} gl={{ antialias: true }} camera={{ position: VIEWS[0]!.position, fov: 72, near: 0.05, far: 400 }}>
+    <Canvas dpr={[1, 2]} gl={{ antialias: true }} camera={{ position: VIEWS[0]!.position, fov: 80, near: 0.05, far: 400 }}>
       <color attach="background" args={['#070d0a']} />
       <fog attach="fog" args={['#070d0a', 20, 55]} />
       <ambientLight intensity={0.55} color="#ffd9a8" />
