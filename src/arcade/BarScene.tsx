@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useGLTF } from '@react-three/drei';
+import { useGLTF, useTexture } from '@react-three/drei';
 import type { Object3D } from 'three';
-import { CanvasTexture, LinearFilter, MeshBasicMaterial, PointLight, Vector3 } from 'three';
+import { CanvasTexture, LinearFilter, MeshBasicMaterial, MeshStandardMaterial, PointLight, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three';
 import type { View } from './views';
 import { VIEWS } from './views';
 import { blocked, insideBounds, DOOR_AT } from './colliders';
@@ -220,6 +220,18 @@ function Blockout() {
     (window as unknown as { __scene?: Object3D }).__scene = scene;
   }, [objects, triangles, scene]);
 
+  // The model's own walls step aside; the interior walls are drawn as planes
+  // with UVs we control, so the planks always run upright.
+  useEffect(() => {
+    scene.traverse((node) => {
+      const mesh = node as Object3D & { isMesh?: boolean };
+      if (!mesh.isMesh) return;
+      if (['wall_left', 'wall_right', 'wall_back'].includes(mesh.name)) {
+        mesh.visible = false;
+      }
+    });
+  }, [scene]);
+
   return <primitive object={scene} />;
 }
 
@@ -292,6 +304,38 @@ function NeonSign() {
   );
 }
 
+
+function WoodWalls() {
+  const wood = useTexture('/textures/wood-wall.png');
+
+  const walls: { pos: [number, number, number]; rotY: number; w: number; h: number }[] = [
+    { pos: [-6.86, 2.1, 0], rotY: Math.PI / 2, w: 18, h: 4.2 },
+    { pos: [6.86, 2.1, 0], rotY: -Math.PI / 2, w: 18, h: 4.2 },
+    { pos: [0, 2.1, -8.86], rotY: 0, w: 14, h: 4.2 },
+  ];
+
+  return (
+    <group>
+      {walls.map((wall, index) => {
+        const tex = wood.clone();
+        tex.wrapS = RepeatWrapping;
+        tex.wrapT = RepeatWrapping;
+        tex.colorSpace = SRGBColorSpace;
+        tex.anisotropy = 8;
+        tex.needsUpdate = true;
+        // the sample holds four planks across; planks are ~0.2 m wide, 1.8 m long
+        tex.repeat.set((wall.w / 0.85) / 4 * 4, wall.h / 1.8);
+        return (
+          <mesh key={index} position={wall.pos} rotation={[0, wall.rotY, 0]}>
+            <planeGeometry args={[wall.w, wall.h]} />
+            <meshStandardMaterial map={tex} color={0x8f8170} roughness={0.74} metalness={0.02} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
 function DebugScene() {
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
@@ -328,6 +372,7 @@ export function BarScene({ view, look, move }: { view: View; look: Look; move: R
       <Player view={view} look={look} move={move} onDoor={setDoorOpen} />
       <Doors open={doorOpen} />
       <NeonSign />
+      <WoodWalls />
       <Blockout />
     </Canvas>
   );
