@@ -121,8 +121,8 @@ export function GameOverlay({
       )}
 
       {state.phase === 'summary' && (
-        <div className="pointer-events-auto mx-auto w-full max-w-lg rounded-2xl border border-[#c9973f]/25 bg-[#07110c] p-5 shadow-2xl">
-          <div className="flex items-end justify-between">
+        <div className="panel-drop pointer-events-auto mx-auto w-full max-w-lg rounded-2xl border border-[#c9973f]/25 bg-[#07110c] p-5 shadow-2xl">
+          <div className="line-rise flex items-end justify-between" style={{ animationDelay: '90ms' }}>
             <div>
               <p className="text-[10px] uppercase tracking-[0.3em] text-[#c9973f]">Round complete</p>
               <p className="mt-1 text-4xl tracking-[0.04em] text-[#efe6d6]">
@@ -139,7 +139,11 @@ export function GameOverlay({
 
           <ul className="mt-4 space-y-1">
             {state.results.map((hand, i) => (
-              <li key={i} className="flex items-center justify-between text-[12px] text-[#c8d4ca]">
+              <li
+                key={i}
+                className="line-rise flex items-center justify-between text-[12px] text-[#c8d4ca]"
+                style={{ animationDelay: `${180 + i * 45}ms` }}
+              >
                 <span>Hand {i + 1}</span>
                 <span className="flex items-center gap-3">
                   <span className={hand ? TONE[hand.outcome] : 'text-[#7f9587]'}>
@@ -153,11 +157,17 @@ export function GameOverlay({
             ))}
           </ul>
 
-          <p className="mt-4 border-t border-[#1d2a22] pt-3 text-[10px] uppercase tracking-[0.16em] text-[#7f9587]">
+          <p
+            className="line-rise mt-4 border-t border-[#1d2a22] pt-3 text-[10px] uppercase tracking-[0.16em] text-[#7f9587]"
+            style={{ animationDelay: `${180 + state.results.length * 45 + 60}ms` }}
+          >
             {RULES.map(([name, value]) => `${name} ${value}`).join(' · ')}
           </p>
 
-          <div className="mt-4 flex gap-2">
+          <div
+            className="line-rise mt-4 flex gap-2"
+            style={{ animationDelay: `${180 + state.results.length * 45 + 140}ms` }}
+          >
             <button type="button" onClick={onRestart} className="key key-gold flex-1">
               Deal again
             </button>
