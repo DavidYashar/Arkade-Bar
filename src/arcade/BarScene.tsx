@@ -6,6 +6,8 @@ import { BackSide, CanvasTexture, LinearFilter, MeshBasicMaterial, MeshStandardM
 import type { View } from './views';
 import { VIEWS } from './views';
 import { blocked, insideBounds, DOOR_AT } from './colliders';
+import { BlackjackCards, BlackjackTable } from '@/games/blackjack/Blackjack3D';
+import type { BlackjackState } from '@/games/blackjack/useBlackjack';
 
 const EYE = 1.68;
 const SPEED = 3.1;
@@ -19,11 +21,15 @@ function Player({
   look,
   move,
   onDoor,
+  seat,
+  onPosition,
 }: {
   view: View;
   look: Look;
   move: React.RefObject<{ x: number; z: number }>;
   onDoor: (open: boolean) => void;
+  seat: boolean;
+  onPosition: (x: number, z: number) => void;
 }) {
   const camera = useThree((s) => s.camera);
   const pos = useRef(new Vector3(view.position[0], EYE, view.position[2]));
@@ -47,6 +53,11 @@ function Player({
   }, []);
 
   useFrame((_, delta) => {
+    if (seat) {
+      camera.position.set(0, 1.62, 4.05);
+      camera.rotation.set(-0.35, 0, 0, 'YXZ');
+      return;
+    }
     const step = Math.min(delta, 0.05) * SPEED;
     const dir = new Vector3();
 
@@ -90,6 +101,7 @@ function Player({
     frame.current += 1;
     if (frame.current % 5 === 0) {
       document.body.dataset.pos = `${pos.current.x.toFixed(2)},${pos.current.z.toFixed(2)}`;
+      onPosition(pos.current.x, pos.current.z);
     }
   });
 
@@ -226,7 +238,8 @@ function Blockout() {
     scene.traverse((node) => {
       const mesh = node as Object3D & { isMesh?: boolean };
       if (!mesh.isMesh) return;
-      if (['wall_left', 'wall_right', 'wall_back'].includes(mesh.name)) {
+      const hide = ['wall_left', 'wall_right', 'wall_back', 'card_table', 'card_felt'];
+      if (hide.includes(mesh.name) || mesh.name.startsWith('card_chair')) {
         mesh.visible = false;
       }
     });
@@ -410,7 +423,21 @@ function DebugScene() {
   return null;
 }
 
-export function BarScene({ view, look, move }: { view: View; look: Look; move: React.RefObject<{ x: number; z: number }> }) {
+export function BarScene({
+  view,
+  look,
+  move,
+  seat,
+  blackjack,
+  onPosition,
+}: {
+  view: View;
+  look: Look;
+  move: React.RefObject<{ x: number; z: number }>;
+  seat: boolean;
+  blackjack: BlackjackState;
+  onPosition: (x: number, z: number) => void;
+}) {
   const [doorOpen, setDoorOpen] = useState(false);
 
   useEffect(() => {
@@ -432,7 +459,16 @@ export function BarScene({ view, look, move }: { view: View; look: Look; move: R
       <pointLight position={[-3.4, 2.6, 6.6]} intensity={10} distance={11} color="#ffbf73" />
       <pointLight position={[3.4, 2.6, 6.6]} intensity={10} distance={11} color="#ffbf73" />
       <DebugScene />
-      <Player view={view} look={look} move={move} onDoor={setDoorOpen} />
+      <Player
+        view={view}
+        look={look}
+        move={move}
+        onDoor={setDoorOpen}
+        seat={seat}
+        onPosition={onPosition}
+      />
+      <BlackjackTable />
+      <BlackjackCards state={blackjack} />
       <Doors open={doorOpen} />
       <SkyStars />
       <NeonSign />

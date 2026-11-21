@@ -16,3 +16,24 @@ body {
   color: #e8f0ea;
   font-family: Georgia, 'Times New Roman', serif;
 }
+
+
+/* The table keys, same family as the entrance buttons. */
+.key {
+  min-height: 48px;
+  flex: 1 1 120px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  padding: 0 18px;
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: transform 120ms ease, background 160ms ease, border-color 160ms ease;
+}
+.key:active { transform: translateY(1px); }
+.key-cream { background: #efe6d6; color: #17140f; }
+.key-ink { background: #17140f; color: #efe6d6; border-color: #3a3128; }
+.key-gold { background: #c9973f; color: #17140f; }
+.key-ghost { background: transparent; color: #c8d4ca; border-color: #3a4a40; }
+.key:disabled { opacity: 0.45; cursor: not-allowed; }

@@ -1,6 +1,8 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { BarScene, type Look } from './arcade/BarScene';
 import { VIEWS, type View } from './arcade/views';
+import { useBlackjack } from './games/blackjack/useBlackjack';
+import { GameOverlay } from './games/blackjack/GameOverlay';
 
 function lookAt(view: View): Look {
   const [px, py, pz] = view.position;
@@ -18,6 +20,9 @@ export function App() {
   const [view, setView] = useState<View>({ ...VIEWS[0]!, position: [0, 1.68, 14.4] });
   const [look, setLook] = useState<Look>(() => lookAt(VIEWS[0]!));
   const [hint, setHint] = useState(true);
+  const [seated, setSeated] = useState(false);
+  const [nearTable, setNearTable] = useState(false);
+  const blackjack = useBlackjack();
   const move = useRef({ x: 0, z: 0 });
   const surface = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number } | null>(null);
@@ -37,6 +42,11 @@ export function App() {
         setLook(lookAt(next));
       }
       if (event.code === 'Escape') setHint(true);
+      if (seated && blackjack.state.phase === 'deciding') {
+        if (event.code === 'KeyH') blackjack.answer('hit');
+        if (event.code === 'KeyS') blackjack.answer('stand');
+        if (event.code === 'KeyD') blackjack.answer('double');
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -75,7 +85,17 @@ export function App() {
         }}
       >
         <Suspense fallback={<Loading />}>
-          <BarScene view={view} look={look} move={move} />
+          <BarScene
+            view={view}
+            look={look}
+            move={move}
+            seat={seated}
+            blackjack={blackjack.state}
+            onPosition={(x, z) => {
+              const near = Math.hypot(x - 0, z - 2.0) < 3.9;
+              setNearTable((current) => (current === near ? current : near));
+            }}
+          />
         </Suspense>
       </div>
 
@@ -84,6 +104,7 @@ export function App() {
         className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/75 via-black/35 to-transparent"
       />
 
+      {!seated && (
       <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 sm:p-7">
         <div>
           <p className="text-[10px] uppercase tracking-[0.32em] text-[#c9973f]">Funtico</p>
@@ -94,6 +115,7 @@ export function App() {
           walk inside
         </p>
       </header>
+      )}
 
       <p
         className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c9973f]/40 bg-black/55 px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-[#f0e6cf] transition-opacity duration-500 ${
@@ -105,7 +127,35 @@ export function App() {
 
       <Joystick stick={stick} move={move} />
 
-      <nav aria-label="Views" className="absolute inset-x-0 bottom-0 p-3 sm:p-6">
+      {seated && (
+        <GameOverlay
+          state={blackjack.state}
+          onAnswer={(action) => blackjack.answer(action)}
+          onLeave={() => {
+            blackjack.leave();
+            setSeated(false);
+          }}
+          onRestart={() => blackjack.start()}
+        />
+      )}
+
+      {!seated && nearTable && (
+        <button
+          type="button"
+          onClick={() => {
+            setSeated(true);
+            blackjack.start();
+          }}
+          className="pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c9973f]/50 bg-black/70 px-6 py-3 text-[11px] uppercase tracking-[0.24em] text-[#f0e6cf] hover:border-[#c9973f]"
+        >
+          Sit at the card table
+        </button>
+      )}
+
+      <nav
+        aria-label="Views"
+        className={`absolute inset-x-0 bottom-0 p-3 sm:p-6 ${seated ? 'hidden' : ''}`}
+      >
         <ul className="mx-auto flex max-w-3xl flex-wrap justify-center gap-2">
           {VIEWS.map((item, index) => {
             const active = item.id === view.id;
