@@ -43,7 +43,12 @@ function useDeal(root: React.RefObject<Group | null>, target: [number, number, n
     const node = root.current;
     if (!node) return;
     if (startedAt.current === null) startedAt.current = state.clock.elapsedTime + delay;
-    const t = Math.min(1, Math.max(0, (state.clock.elapsedTime - startedAt.current) / DEAL_S));
+    const elapsed = state.clock.elapsedTime - startedAt.current;
+    // A card that has not been dealt yet must not sit at the shoe waiting: hide it
+    // until its turn, then let it fly.
+    node.visible = elapsed >= 0;
+    if (elapsed < 0) return;
+    const t = Math.min(1, Math.max(0, elapsed / DEAL_S));
     const eased = 1 - (1 - t) ** 4;
     node.position.set(
       SHOE[0] + (target[0] - SHOE[0]) * eased,
