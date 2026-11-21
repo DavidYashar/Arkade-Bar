@@ -13,7 +13,7 @@ import {
   type RoundResult,
 } from './round';
 import { isCorrect, readHand, type Action, type Rank } from './strategy';
-import { playDeal, playPlace } from '@/lib/sfx';
+import { playPlace } from '@/lib/sfx';
 
 export type Phase = 'idle' | 'deciding' | 'dealer' | 'verdict' | 'summary';
 
@@ -73,11 +73,6 @@ export function useBlackjack() {
     const hand = script.current[index];
     if (!hand) return;
     shownAt.current = performance.now();
-    // four cards leave the shoe as the hand is dealt
-    for (let i = 0; i < 4; i += 1) {
-      const id = window.setTimeout(() => playDeal(0.6), 60 + i * 160);
-      timers.current.push(id);
-    }
     // The hole is the card the dealer is dealt face down: the hand's second card.
     const cards = [...hand.cards, ...[]];
     hole.current = cards[0] ?? 'A';
@@ -138,7 +133,6 @@ export function useBlackjack() {
           return;
         }
         if (i === 1) playPlace(0.6);
-        else if (i > 1) playDeal(0.65);
         setState((s) => ({
           ...s,
           dealer: all.slice(0, i + 1),
@@ -167,7 +161,6 @@ export function useBlackjack() {
       if (action === 'hit') {
         const drawn = drawPlayer(seed.current, index, state.player.length);
         const cards = [...state.player, drawn];
-        playDeal(0.7);
         if (readHand(cards).total > 21) {
           // bust: the dealer shows its cards and the hand ends
           dealerPlays(index, cards, 'hit', isCorrect(hand.cards, hand.dealerUp, 'hit'));
@@ -178,7 +171,6 @@ export function useBlackjack() {
       }
 
       const cards: Rank[] = action === 'double' ? [...state.player, drawPlayer(seed.current, index, 1)] : [...state.player];
-      if (action === 'double') playDeal(0.7);
       dealerPlays(index, cards, action, isCorrect(hand.cards, hand.dealerUp, action));
     },
     [state.index, state.phase, state.player, dealerPlays],

@@ -12,6 +12,8 @@ let context: AudioContext | null = null;
 let master: GainNode | null = null;
 
 const buffers = new Map<string, AudioBuffer>();
+/** How much silence each sample opens with, so playback can skip it. */
+const leads = new Map<string, number>();
 const loading = new Map<string, Promise<AudioBuffer | null>>();
 const files = new Map<string, Promise<ArrayBuffer | null>>();
 
@@ -58,6 +60,17 @@ function prefetch(name: string): Promise<ArrayBuffer | null> {
   return promise;
 }
 
+/** Seconds of near-silence at the head of a sample. The recordings open with ~50 ms
+ * of room tone, and starting at zero puts that gap between the tap and the sound. */
+function leadingSilence(buffer: AudioBuffer): number {
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i += 1) {
+    const value = data[i];
+    if (value !== undefined && Math.abs(value) > 0.01) return i / buffer.sampleRate;
+  }
+  return 0;
+}
+
 function load(name: string): Promise<AudioBuffer | null> {
   const cached = buffers.get(name);
   if (cached) return Promise.resolve(cached);
@@ -70,7 +83,10 @@ function load(name: string): Promise<AudioBuffer | null> {
   const promise = prefetch(name)
     .then((data) => (data ? ctx.decodeAudioData(data) : null))
     .then((buffer) => {
-      if (buffer) buffers.set(name, buffer);
+      if (buffer) {
+        buffers.set(name, buffer);
+        leads.set(name, leadingSilence(buffer));
+      }
       loading.delete(name);
       return buffer;
     })
@@ -105,7 +121,7 @@ export function play(name: 'deal' | 'place' | 'tap', gain = 1): void {
       level.gain.value = gain;
       source.connect(level);
       level.connect(master);
-      source.start();
+      source.start(0, leads.get(name) ?? 0);
     });
   };
 

@@ -5,6 +5,7 @@ import type { Group, Mesh } from 'three';
 import type { Rank } from './strategy';
 import { cardArt, makeSuitDealer, BACK_ART, SUITS } from './deck';
 import type { BlackjackState } from './useBlackjack';
+import { playDeal } from '@/lib/sfx';
 
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'] as const;
 for (const rank of RANKS) {
@@ -39,15 +40,20 @@ type CardProps = {
 /** Flies a card in from the shoe, with an arc and a settling twist. */
 function useDeal(root: React.RefObject<Group | null>, target: [number, number, number], delay: number, tilt = 0) {
   const startedAt = useRef<number | null>(null);
+  const sounded = useRef(false);
   useFrame((state) => {
     const node = root.current;
     if (!node) return;
     if (startedAt.current === null) startedAt.current = state.clock.elapsedTime + delay;
     const elapsed = state.clock.elapsedTime - startedAt.current;
     // A card that has not been dealt yet must not sit at the shoe waiting: hide it
-    // until its turn, then let it fly.
+    // until its turn, then let it fly. The slide is heard on the frame it leaves.
     node.visible = elapsed >= 0;
     if (elapsed < 0) return;
+    if (!sounded.current) {
+      sounded.current = true;
+      playDeal(0.6);
+    }
     const t = Math.min(1, Math.max(0, elapsed / DEAL_S));
     const eased = 1 - (1 - t) ** 4;
     node.position.set(
@@ -149,6 +155,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
     <group position={[0, 0, 2.0]}>
       {state.dealer[0] && (
         <Card
+          key={`${state.index}-up`}
           rank={state.dealer[0]}
           suit={suits.dealer[0]!}
           target={slot(0, -0.50)}
@@ -157,6 +164,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
         />
       )}
       <HoleCard
+        key={`${state.index}-hole`}
         rank={holeRank}
         suit={holeSuit}
         down={state.holeHidden}
@@ -166,7 +174,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
       />
       {state.dealer.slice(2).map((rank, i) => (
         <Card
-          key={`d-${i}`}
+          key={`${state.index}-d-${i}`}
           rank={rank}
           suit={suits.dealer[i + 2]!}
           target={slot(i + 2, -0.50)}
@@ -176,7 +184,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
       ))}
       {state.player.map((rank, i) => (
         <Card
-          key={`p-${i}`}
+          key={`${state.index}-p-${i}`}
           rank={rank}
           suit={suits.player[i]!}
           target={slot(i, 0.50)}
