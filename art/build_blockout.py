@@ -228,9 +228,9 @@ def build_lounge():
     box("coffee_table", (1.3, 0.7, 0.35), (-4.3, -4.9, 0.17), m_walnut)
 
     # plants at the corners
-    for i, (x, y) in enumerate(((-6.2, -7.6), (6.2, -7.6), (-6.2, 2.0), (6.2, 2.0))):
-        cyl(f"pot_{i}", 0.28, 0.55, (x, y, 0.27), m_ink)
-        sphere(f"plant_{i}", 0.55, (x, y, 1.05), material(f"leaf_{i}", (0.10, 0.28, 0.10, 1)))
+    # the same palms as the entrance, one species for the whole bar
+    for i, (x, y, seed) in enumerate(((-6.2, -7.6, 7), (6.2, -7.6, 11), (-6.2, 2.0, 13), (6.2, 2.0, 17))):
+        palm.build_palm(f"plant_{i}", (x, y, 0.0), height=1.42, reach=0.86, fronds=16, seed=seed)
 
 
 def sign_ghost():
