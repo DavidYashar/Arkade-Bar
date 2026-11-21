@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { BarScene, type Look } from './arcade/BarScene';
 import { VIEWS, type View } from './arcade/views';
 
@@ -17,7 +17,6 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 export function App() {
   const [view, setView] = useState<View>({ ...VIEWS[0]!, position: [0, 1.68, 14.4] });
   const [look, setLook] = useState<Look>(() => lookAt(VIEWS[0]!));
-  const [locked, setLocked] = useState(false);
   const [hint, setHint] = useState(true);
   const move = useRef({ x: 0, z: 0 });
   const surface = useRef<HTMLDivElement>(null);
@@ -27,34 +26,6 @@ export function App() {
   useEffect(() => {
     const timer = window.setTimeout(() => setHint(false), 9000);
     return () => window.clearTimeout(timer);
-  }, []);
-
-  const lock = useCallback(async () => {
-    const el = surface.current;
-    if (!el) return;
-    try {
-      await el.requestPointerLock?.();
-    } catch {
-      /* a browser may refuse the lock; drag still works */
-    }
-  }, []);
-
-  useEffect(() => {
-    const onChange = () => setLocked(document.pointerLockElement === surface.current);
-    document.addEventListener('pointerlockchange', onChange);
-    return () => document.removeEventListener('pointerlockchange', onChange);
-  }, []);
-
-  useEffect(() => {
-    const onMove = (event: MouseEvent) => {
-      if (document.pointerLockElement !== surface.current) return;
-      setLook((current) => ({
-        yaw: current.yaw - event.movementX * 0.0032,
-        pitch: clamp(current.pitch - event.movementY * 0.0028, -1.1, 1.1),
-      }));
-    };
-    document.addEventListener('mousemove', onMove);
-    return () => document.removeEventListener('mousemove', onMove);
   }, []);
 
   useEffect(() => {
@@ -76,24 +47,15 @@ export function App() {
       <div
         ref={surface}
         className="absolute inset-0 cursor-pointer touch-none"
-        onClick={lock}
         onContextMenu={(event) => {
           event.preventDefault();
-          if (document.pointerLockElement === surface.current) {
-            document.exitPointerLock();
-          }
         }}
         onPointerDown={(event) => {
-          // The right button always gives the mouse back, whether the context
-          // menu arrives or not.
           if (event.button === 2) {
             event.preventDefault();
-            if (document.pointerLockElement) document.exitPointerLock();
             return;
           }
-          if (document.pointerLockElement !== surface.current) {
-            drag.current = { x: event.clientX, y: event.clientY };
-          }
+          drag.current = { x: event.clientX, y: event.clientY };
         }}
         onPointerMove={(event) => {
           if (!drag.current) return;
@@ -138,9 +100,7 @@ export function App() {
           hint ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        {locked
-          ? 'Arrows walk · move the mouse to look · right click frees it'
-          : 'Click to take the mouse, or drag to look'}
+        {'Drag to look · arrows to walk'}
       </p>
 
       <Joystick stick={stick} move={move} />
