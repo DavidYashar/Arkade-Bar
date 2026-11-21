@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF, useTexture } from '@react-three/drei';
 import type { Object3D } from 'three';
-import { CanvasTexture, LinearFilter, MeshBasicMaterial, MeshStandardMaterial, PointLight, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three';
+import { BackSide, CanvasTexture, LinearFilter, MeshBasicMaterial, MeshStandardMaterial, PointLight, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three';
 import type { View } from './views';
 import { VIEWS } from './views';
 import { blocked, insideBounds, DOOR_AT } from './colliders';
@@ -333,6 +333,41 @@ function NeonSign() {
   );
 }
 
+
+/** The sky: NASA's star map on one inside-out sphere, carried with the camera. */
+function SkyStars() {
+  const texture = useTexture('/textures/sky_stars.avif');
+  const pivot = useRef<Object3D>(null);
+  const sphere = useRef<Object3D>(null);
+  const camera = useThree((s) => s.camera);
+
+  useEffect(() => {
+    texture.colorSpace = SRGBColorSpace;
+    texture.anisotropy = 4;
+  }, [texture]);
+
+  useFrame((_, delta) => {
+    if (pivot.current) pivot.current.position.copy(camera.position);
+    if (sphere.current) sphere.current.rotation.y += delta * 0.002;
+  });
+
+  return (
+    <group ref={pivot} frustumCulled={false}>
+      <mesh ref={sphere} renderOrder={-1000} frustumCulled={false} rotation={[Math.PI / 2 - 0.409, 0, 0]}>
+        <sphereGeometry args={[250, 64, 32]} />
+        <meshBasicMaterial
+          map={texture}
+          side={BackSide}
+          depthWrite={false}
+          depthTest={false}
+          fog={false}
+          toneMapped={false}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 function WoodWalls() {
   const wood = useTexture('/textures/wood-wall.png');
 
@@ -383,7 +418,7 @@ export function BarScene({ view, look, move }: { view: View; look: Look; move: R
   }, [doorOpen]);
 
   return (
-    <Canvas dpr={[1, 2]} gl={{ antialias: true }} camera={{ position: VIEWS[0]!.position, fov: 60, near: 0.05, far: 140 }}>
+    <Canvas dpr={[1, 2]} gl={{ antialias: true }} camera={{ position: VIEWS[0]!.position, fov: 60, near: 0.05, far: 400 }}>
       <color attach="background" args={['#070d0a']} />
       <fog attach="fog" args={['#070d0a', 20, 55]} />
       <ambientLight intensity={0.55} color="#ffd9a8" />
@@ -399,6 +434,7 @@ export function BarScene({ view, look, move }: { view: View; look: Look; move: R
       <DebugScene />
       <Player view={view} look={look} move={move} onDoor={setDoorOpen} />
       <Doors open={doorOpen} />
+      <SkyStars />
       <NeonSign />
       <WoodWalls />
       <Blockout />
