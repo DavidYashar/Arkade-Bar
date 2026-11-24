@@ -2040,7 +2040,7 @@ export function PinballTable({ onExit, onReady, loadingId, active = true }: {
       <Canvas
         shadows="percentage"
         frameloop={active ? "always" : "never"}
-        dpr={[1, 2]}
+        dpr={coarse ? [1, 1.25] : [1, 2]}
         camera={{ position: [1.42, 2.72, 0], fov: 40, near: 0.02, far: 40 }}
         gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         onCreated={({ camera }) => camera.lookAt(0, PLAY.y + 0.02, 0)}

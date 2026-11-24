@@ -739,7 +739,7 @@ export function BarScene({
   }, [doorOpen]);
 
   return (
-    <Canvas shadows="percentage" dpr={[1, 2]} gl={{ antialias: true }} frameloop={paused ? 'never' : 'always'} camera={{ position: VIEWS[0]!.position, fov: 90, near: 0.05, far: 400 }}>
+    <Canvas shadows="percentage" dpr={coarse ? [1, 1.25] : [1, 2]} gl={{ antialias: true }} frameloop={paused ? 'never' : 'always'} camera={{ position: VIEWS[0]!.position, fov: 90, near: 0.05, far: 400 }}>
       <color attach="background" args={['#070d0a']} />
       <fog attach="fog" args={['#070d0a', 20, 55]} />
       {!seat && (warmRoom && onReady

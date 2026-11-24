@@ -1249,7 +1249,7 @@ export function BrickBlitz({ onExit, onReady, loading = false, active = true }: 
       <Canvas
         shadows="percentage"
         frameloop={active ? "always" : "never"}
-        dpr={[1, 2]}
+        dpr={coarse ? [1, 1.25] : [1, 2]}
         camera={{ position: [2.96, 4.3, 0], fov: 44, near: 0.05, far: 60 }}
         gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         onCreated={({ camera }) => camera.lookAt(0, BED.y + 0.02, 0)}
