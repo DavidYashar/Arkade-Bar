@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useGLTF, useTexture } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { DoubleSide } from 'three';
 import type { Group, Mesh } from 'three';
 import type { Rank } from './strategy';
@@ -26,6 +26,12 @@ const TABLE_Y = 0.862;
  * z 0.8 to 3.2 at card height, so the shoe sits just inside that edge.
  */
 const SHOE: [number, number, number] = [0.85, 0.95, 0.9];
+/**
+ * A portrait phone sees about half a metre either side of the felt at card height,
+ * so the shoe moves in. Otherwise a card spends its whole flight off screen and
+ * simply appears on the table.
+ */
+const SHOE_NARROW: [number, number, number] = [0.45, 0.95, 1.12];
 export const DEAL_S = 0.32;
 
 /** When the player's n-th card leaves the shoe, in seconds. The opening pair is
@@ -50,11 +56,12 @@ type CardProps = {
   down?: boolean;
   target: [number, number, number];
   delay: number;
+  shoe: [number, number, number];
   tilt?: number;
 };
 
 /** Flies a card in from the shoe, with an arc and a settling twist. */
-function useDeal(root: React.RefObject<Group | null>, target: [number, number, number], delay: number, tilt = 0) {
+function useDeal(root: React.RefObject<Group | null>, target: [number, number, number], delay: number, shoe: [number, number, number], tilt = 0) {
   const startedAt = useRef<number | null>(null);
   const sounded = useRef(false);
   useFrame((state) => {
@@ -73,19 +80,19 @@ function useDeal(root: React.RefObject<Group | null>, target: [number, number, n
     const t = Math.min(1, Math.max(0, elapsed / DEAL_S));
     const eased = 1 - (1 - t) ** 4;
     node.position.set(
-      SHOE[0] + (target[0] - SHOE[0]) * eased,
-      SHOE[1] + (target[1] - SHOE[1]) * eased + Math.sin(Math.PI * t) * 0.12,
-      SHOE[2] + (target[2] - SHOE[2]) * eased,
+      shoe[0] + (target[0] - shoe[0]) * eased,
+      shoe[1] + (target[1] - shoe[1]) * eased + Math.sin(Math.PI * t) * 0.12,
+      shoe[2] + (target[2] - shoe[2]) * eased,
     );
     node.rotation.set(-Math.PI / 2, 0, tilt + (1 - eased) * 0.6);
   });
 }
 
-function Card({ rank, suit, down, target, delay, tilt = 0 }: CardProps) {
+function Card({ rank, suit, down, target, delay, shoe, tilt = 0 }: CardProps) {
   const url = down ? BACK_ART : (cardArt({ rank, suit }) ?? BACK_ART);
   const texture = useTexture(url);
   const root = useRef<Group>(null);
-  useDeal(root, target, delay, tilt);
+  useDeal(root, target, delay, shoe, tilt);
 
   return (
     <group ref={root}>
@@ -98,13 +105,13 @@ function Card({ rank, suit, down, target, delay, tilt = 0 }: CardProps) {
 }
 
 /** The hole card: flies in face down, then turns over on the felt when revealed. */
-function HoleCard({ rank, suit, down, target, delay, tilt = 0 }: CardProps) {
+function HoleCard({ rank, suit, down, target, delay, shoe, tilt = 0 }: CardProps) {
   const face = useTexture(cardArt({ rank, suit }) ?? BACK_ART);
   const back = useTexture(BACK_ART);
   const root = useRef<Group>(null);
   const flip = useRef<Group>(null);
   const landed = useRef<number | null>(null);
-  useDeal(root, target, delay, tilt);
+  useDeal(root, target, delay, shoe, tilt);
 
   useFrame((state) => {
     const node = flip.current;
@@ -154,6 +161,7 @@ function slot(index: number, baseZ: number): [number, number, number] {
 }
 
 export function BlackjackCards({ state }: { state: BlackjackState }) {
+  const size = useThree(({ size: viewport }) => viewport);
   // Each side is dealt its own faces, keyed by seed, hand and position, so a hit can
   // never repaint the dealer's up card.
   const suits = useMemo(() => {
@@ -166,6 +174,8 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
 
   if (state.phase === 'idle') return null;
 
+  const narrow = size.width / Math.max(1, size.height) < 0.9;
+  const shoe = narrow ? SHOE_NARROW : SHOE;
   const holeRank = state.dealer[1] ?? 'A';
   const holeSuit = suits.dealer[1] ?? 'S';
 
@@ -178,6 +188,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           suit={suits.dealer[0]!}
           target={slot(0, -0.50)}
           delay={0.16}
+          shoe={shoe}
           tilt={-0.03}
         />
       )}
@@ -188,6 +199,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
         down={state.holeHidden}
         target={slot(1, -0.50)}
         delay={0.48}
+        shoe={shoe}
         tilt={0.03}
       />
       {state.dealer.slice(2).map((rank, i) => (
@@ -197,6 +209,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           suit={suits.dealer[i + 2]!}
           target={slot(i + 2, -0.50)}
           delay={0}
+          shoe={shoe}
           tilt={(i - 1) * 0.03}
         />
       ))}
@@ -207,6 +220,7 @@ export function BlackjackCards({ state }: { state: BlackjackState }) {
           suit={suits.player[i]!}
           target={slot(i, 0.50)}
           delay={playerDelay(i)}
+          shoe={shoe}
           tilt={(i % 2 === 0 ? -1 : 1) * 0.03}
         />
       ))}

@@ -745,8 +745,8 @@ export function BarScene({
 
   return (
     <>
-    <Canvas shadows={coarse ? (seat ? "percentage" : false) : "percentage"} dpr={coarse ? 1 : [1, 2]} gl={{ antialias: !coarse }} frameloop={paused ? 'never' : coarse ? 'demand' : 'always'} camera={{ position: VIEWS[0]!.position, fov: 90, near: 0.05, far: 400 }}>
-      {coarse && !paused && <FrameCap fps={30} />}
+    <Canvas shadows={coarse ? (seat ? "percentage" : false) : "percentage"} dpr={coarse ? 1 : [1, 2]} gl={{ antialias: !coarse }} frameloop={paused ? 'never' : coarse && !seat ? 'demand' : 'always'} camera={{ position: VIEWS[0]!.position, fov: 90, near: 0.05, far: 400 }}>
+      {coarse && !paused && !seat && <FrameCap fps={30} />}
       {perf && <PerfProbe />}
       <color attach="background" args={['#070d0a']} />
       <fog attach="fog" args={['#070d0a', 20, 55]} />
