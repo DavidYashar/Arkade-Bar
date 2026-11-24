@@ -1,6 +1,17 @@
-﻿node_modules/
+node_modules/
 dist/
 .tmp/
 .DS_Store
 *.local
 
+# Python caches from the Blender scripts
+__pycache__/
+*.pyc
+
+# Local tooling and installers, never part of the app
+.tools/
+*.blend1
+
+# Nothing secret belongs in the repo
+.env
+.env.*

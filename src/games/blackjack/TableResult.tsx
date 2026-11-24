@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Outcome } from './round';
 
@@ -58,6 +58,16 @@ export function TableResult({ outcome }: { outcome: Outcome | null }) {
   const born = useState(() => performance.now())[0];
   const material = useRef<THREE.MeshBasicMaterial>(null);
 
+  // The words are painted on the felt, so their size follows the lens: on a phone
+  // the seated camera sees a narrower slice of table and the plane shrinks to match.
+  const camera = useThree(({ camera }) => camera) as THREE.PerspectiveCamera;
+  const size = useThree(({ size }) => size);
+  const planeWidth = useMemo(() => {
+    const distance = Math.max(0.3, Math.abs(camera.position.y - 0.868));
+    const visible = 2 * distance * Math.tan((camera.fov * Math.PI) / 360) * (size.width / size.height);
+    return Math.max(0.42, Math.min(1.5, visible * 0.9));
+  }, [camera, size.width, size.height]);
+
   useFrame(() => {
     const node = mesh.current;
     if (!node || !material.current) return;
@@ -73,7 +83,7 @@ export function TableResult({ outcome }: { outcome: Outcome | null }) {
 
   return (
     <mesh ref={mesh} position={[0, 0.868, 2.0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[1.5, 0.42]} />
+      <planeGeometry args={[planeWidth, planeWidth / 3.56]} />
       <meshBasicMaterial
         ref={material}
         map={texture}

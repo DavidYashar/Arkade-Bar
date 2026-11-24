@@ -6,11 +6,14 @@
  * Synthesised with the Web Audio API — no files, nothing to licence.
  */
 
+import { isGameMuted, onGameMute } from '@/lib/gameSound';
+
 export type BrickKind = "clay" | "stone" | "glass" | "keg" | "gold" | "iron";
 
 export class BrickAudio {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private muted = isGameMuted();
   private lastBrickAt = 0;
   /** When each material last sounded, so one material cannot silence another. */
   private lastKindAt: Partial<Record<BrickKind, number>> = {};
@@ -64,33 +67,64 @@ export class BrickAudio {
     return { loaded: [...this.samples.keys()], plays: { ...this.plays } };
   }
 
+  /**
+   * Build the context once. Safe before any gesture: it starts suspended, and
+   * decoding recordings into a suspended context works, which is the point â€” the
+   * hits are ready before the first shot instead of a few seconds after it.
+   */
+  private ensure(): AudioContext | null {
+    if (this.ctx) return this.ctx;
+    const Ctor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return null;
+
+    const ctx = new Ctor();
+    const master = ctx.createGain();
+    master.gain.value = this.muted ? 0 : 0.9;
+
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14;
+    comp.knee.value = 12;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.18;
+
+    master.connect(comp);
+    comp.connect(ctx.destination);
+
+    this.ctx = ctx;
+    this.master = master;
+    this.startRoll();
+    void this.loadSamples();
+    return ctx;
+  }
+
+  /** Called at import: the context and the recordings are warm before a player is. */
+  warm(): void {
+    this.ensure();
+  }
+
+  /**
+   * True when the sound had to be deferred: the context was still suspended, so the
+   * caller should not schedule against a frozen clock. The same call is replayed the
+   * moment the context runs, which keeps the first cue on the same gesture.
+   */
+  private deferred(play: () => void): boolean {
+    const ctx = this.ctx ?? this.ensure();
+    if (!ctx) return true;
+    if (ctx.state === "running") return false;
+    void ctx
+      .resume()
+      .then(() => play())
+      .catch(() => {});
+    return true;
+  }
+
   async unlock(): Promise<void> {
-    if (!this.ctx) {
-      const Ctor =
-        window.AudioContext ??
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!Ctor) return;
-
-      const ctx = new Ctor();
-      const master = ctx.createGain();
-      master.gain.value = 0.9;
-
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -14;
-      comp.knee.value = 12;
-      comp.ratio.value = 4;
-      comp.attack.value = 0.003;
-      comp.release.value = 0.18;
-
-      master.connect(comp);
-      comp.connect(ctx.destination);
-
-      this.ctx = ctx;
-      this.master = master;
-      this.startRoll();
-    }
-
-    if (this.ctx.state === "suspended") await this.ctx.resume();
+    const ctx = this.ensure();
+    if (!ctx) return;
+    if (ctx.state === "suspended") await ctx.resume();
     void this.loadSamples();
   }
 
@@ -114,6 +148,7 @@ export class BrickAudio {
         try {
           const response = await fetch(`/audio/bricks/${file}.mp3`);
           if (!response.ok) return;
+          if (!(response.headers.get("content-type") ?? "").startsWith("audio/")) return;
           const data = await response.arrayBuffer();
           const buffer = await this.ctx!.decodeAudioData(data);
           this.samples.set(kind, buffer);
@@ -210,6 +245,13 @@ export class BrickAudio {
    * The ball rolling on the felt. Deliberately a low rumble, not a wash of noise: a
    * wide band centred high is what made the earlier version sound like wind.
    */
+  /** The speaker by Stand up: the whole table, not one brick. */
+  setMuted(next: boolean) {
+    this.muted = next;
+    const master = this.master;
+    if (master) master.gain.setTargetAtTime(next ? 0 : 0.9, master.context.currentTime, .04);
+  }
+
   private startRoll(): void {
     const ctx = this.ctx!;
     const source = ctx.createBufferSource();
@@ -236,6 +278,17 @@ export class BrickAudio {
 
     this.rollFilter = filter;
     this.rollGain = gain;
+  }
+
+  /**
+   * Everything down: the roll is muted and the context is suspended, so standing up
+   * leaves the room quiet. unlock() resumes it on the next visit.
+   */
+  silence(): void {
+    if (this.rollGain) this.rollGain.gain.value = 0;
+    this.rollLevel = 0;
+    this.recentStarts = [];
+    if (this.ctx && this.ctx.state === "running") void this.ctx.suspend();
   }
 
   /** Continuous roll, driven by the ball's speed. Quiet, and silent when stopped. */
@@ -299,8 +352,8 @@ export class BrickAudio {
 
   /** The cue: a tip striking the ball. */
   serve(power = 1): void {
-    if (!this.ctx) return;
-    const at = this.ctx.currentTime;
+    if (this.deferred(() => this.serve(power))) return;
+    const at = this.ctx!.currentTime;
     this.burst(at, 0.03, 3000, 0.2 * power, 2.0);
     this.tone(at, 150, 0.09, 0.26 * power, "sine", 85);
   }
@@ -309,7 +362,7 @@ export class BrickAudio {
    * A brick taking a hit. Each material has its own body; `breaking` adds the crack.
    */
   brick(kind: BrickKind, breaking: boolean): void {
-    if (!this.ctx) return;
+    if (this.deferred(() => this.brick(kind, breaking))) return;
     const now = performance.now();
 
     // Only the SAME material is throttled. A blanket limiter dropped real hits when the
@@ -324,7 +377,7 @@ export class BrickAudio {
     this.recentStarts.push(now);
     this.lastBrickAt = now;
 
-    const at = this.ctx.currentTime;
+    const at = this.ctx!.currentTime;
 
     if (this.playSample(kind, breaking ? 1.0 : 0.85)) {
       if (breaking) this.tone(at + 0.01, 110, 0.16, 0.14, "sine", 55);
@@ -370,10 +423,10 @@ export class BrickAudio {
 
   /** A rail or cushion: felt-muted, low, short. */
   cushion(strength = 0.5): void {
-    if (!this.ctx) return;
+    if (this.deferred(() => this.cushion(strength))) return;
     // A brick has just sounded; a rail thump on top of it only muddies the material.
     if (performance.now() - this.lastBrickAt < 90) return;
-    const at = this.ctx.currentTime;
+    const at = this.ctx!.currentTime;
     const s = Math.max(0.2, Math.min(1, strength));
     this.tone(at, 120, 0.09, 0.1 * s, "sine", 70);
     this.burst(at, 0.03, 320, 0.07 * s, 1.0);
@@ -381,30 +434,30 @@ export class BrickAudio {
 
   /** The handler taking the ball: a wooden clack. */
   handler(): void {
-    if (!this.ctx) return;
-    const at = this.ctx.currentTime;
+    if (this.deferred(() => this.handler())) return;
+    const at = this.ctx!.currentTime;
     this.burst(at, 0.03, 1500, 0.12, 1.8);
     this.tone(at, 220, 0.08, 0.12, "triangle", 140);
   }
 
   /** A new row arriving: a low warning. */
   rowAdvance(): void {
-    if (!this.ctx) return;
-    const at = this.ctx.currentTime;
+    if (this.deferred(() => this.rowAdvance())) return;
+    const at = this.ctx!.currentTime;
     this.tone(at, 150, 0.32, 0.14, "triangle", 110);
     this.burst(at, 0.18, 400, 0.05, 0.9);
   }
 
   lose(): void {
-    if (!this.ctx) return;
-    const at = this.ctx.currentTime;
+    if (this.deferred(() => this.lose())) return;
+    const at = this.ctx!.currentTime;
     this.tone(at, 220, 0.5, 0.2, "triangle", 70);
     this.burst(at + 0.05, 0.3, 380, 0.07, 0.7);
   }
 
   win(): void {
-    if (!this.ctx) return;
-    const at = this.ctx.currentTime;
+    if (this.deferred(() => this.win())) return;
+    const at = this.ctx!.currentTime;
     [392, 523.25, 659.25, 783.99].forEach((f, i) => {
       this.tone(at + i * 0.09, f, 0.28, 0.13, "triangle");
     });
@@ -412,3 +465,5 @@ export class BrickAudio {
 }
 
 export const brickAudio = new BrickAudio();
+onGameMute((mutedNow) => brickAudio.setMuted(mutedNow));
+brickAudio.warm();

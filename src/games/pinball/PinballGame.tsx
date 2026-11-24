@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { RoundedBox, useGLTF } from "@react-three/drei";
+import { RoundedBox, useGLTF, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
+import { BlurredBarFloor } from "@/arcade/BlurredBarFloor";
+import { ReadySignal } from "@/arcade/ReadySignal";
+import { MuteButton } from "@/arcade/MuteButton";
 
 import { makeWoodTextures } from './wood';
-import WALLS from './table-walls.json';
 import { audio } from './audio';
+import { drawPinballLcd, LCD_HEIGHT, LCD_WIDTH } from './lcd';
+import { BallReturn, DRAIN_EDGE, LIFT_OFFSET, RETURN_BACK, RETURN_CHANNEL_X } from './ballReturn';
+import { addTableContainment, launchSpeed, ShooterGate, SHOOTER_DIVIDER_Z } from './shooterLane';
+import jesterArtUrl from './jester-playfield.png';
 
 /**
  * Neon Pinball.
@@ -24,9 +30,7 @@ const PLAY = { w: 0.54, l: 1.08, y: 0.85 };
 const HALF_W = PLAY.w / 2;
 const HALF_L = PLAY.l / 2;
 
-// Lane width is two thirds of what it was: 55 mm, about two ball widths.
-const LANE_W = 0.055;
-const DIVIDER_Z = -HALF_W + 0.012 + LANE_W - 0.008;
+const DIVIDER_Z = SHOOTER_DIVIDER_Z;
 
 // Centre of the real lane: between the outer wall's inner face and the divider's
 // lane-side face. LANE_W is not the clear width, because the divider is a slab.
@@ -49,6 +53,8 @@ const CIRCUIT: [number, number][] = [
   [-0.3, -HALF_W + 0.012],
   [TOP_RAMP.x, TOP_RAMP.z],
 ];
+
+const BALLS_PER_RUN = 5;
 
 const RAIL = 0.05;
 const RAIL_H = 0.055;
@@ -94,6 +100,13 @@ const BUMPERS: { x: number; dz: number; color: string; value: number }[] = [
   { x: 0.12, dz: 0, color: "#22e0ff", value: 20 },
 ];
 const PLUNGER_X = HALF_L - 0.115;
+const PLUNGER_Y = PLAY.y + BALL_R + .008;
+const LOADED_BALL = new THREE.Vector3(PLUNGER_X, PLUNGER_Y, CORRIDOR_Z);
+const LIFT_X = PLUNGER_X - LIFT_OFFSET;
+const BED_SECTIONS = [
+  { x0: -HALF_L, x1: DRAIN_EDGE, z0: -HALF_W, z1: HALF_W },
+  { x0: DRAIN_EDGE, x1: HALF_L, z0: -HALF_W, z1: DIVIDER_Z },
+];
 
 /** Flipper geometry in radians. Each bat sweeps exactly 30 degrees and comes back. */
 const FLIP_REST = 0.785;
@@ -157,12 +170,14 @@ function GltfPart({
   position,
   rotation,
   scale,
+  hidePrefix,
 }: {
   url: string;
   mapping: Record<string, THREE.Material>;
   position?: [number, number, number];
   rotation?: [number, number, number];
   scale?: number;
+  hidePrefix?: string;
 }) {
   const { scene } = useGLTF(url);
   const object = useMemo(() => {
@@ -170,13 +185,14 @@ function GltfPart({
     root.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
+      if (hidePrefix && mesh.name.startsWith(hidePrefix)) mesh.visible = false;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       const key = Object.keys(mapping).find((name) => mesh.name.includes(name));
       if (key) mesh.material = mapping[key]!;
     });
     return root;
-  }, [scene, mapping]);
+  }, [scene, mapping, hidePrefix]);
 
   return (
     <primitive
@@ -194,6 +210,7 @@ const shared = {
   flash: {} as Record<number, number>,
   charge: 0,
   plungerHeld: false,
+  liftY: PLAY.y + .008,
   score: 0,
   slingKicks: 0,
   bumperKicks: 0,
@@ -218,27 +235,73 @@ function seeded(seed: number): () => number {
 
 // ------------------------------------------------------------------ table pieces
 
-function Slate() {
-  const lines = useMemo(() => {
-    const out: number[] = [];
-    for (let z = -HALF_W + 0.07; z < HALF_W; z += 0.07) out.push(z);
-    return out;
-  }, []);
+function PlayfieldArt() {
+  const texture = useTexture(jesterArtUrl);
+  useLayoutEffect(() => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 8;
+    texture.needsUpdate = true;
+  }, [texture]);
+  const { width, height } = texture.image as HTMLImageElement;
+  const geometry = useMemo(() => {
+    const outline = new THREE.Shape([
+      new THREE.Vector2(-HALF_L, -HALF_W),
+      new THREE.Vector2(DRAIN_EDGE, -HALF_W),
+      new THREE.Vector2(DRAIN_EDGE, -DIVIDER_Z),
+      new THREE.Vector2(HALF_L, -DIVIDER_Z),
+      new THREE.Vector2(HALF_L, HALF_W),
+      new THREE.Vector2(-HALF_L, HALF_W),
+    ]);
+    const lift = new THREE.Path();
+    lift.absarc(LIFT_X, -CORRIDOR_Z, .0175, 0, Math.PI * 2, true);
+    outline.holes.push(lift);
 
+    const art = new THREE.ShapeGeometry(outline, 20);
+    const positions = art.getAttribute("position");
+    const uv = art.getAttribute("uv");
+    // Keep the boots uphill of the flippers and extend the print to the edges.
+    const artLength = .86;
+    const artWidth = artLength * width / height;
+    const bottom = .333;
+    for (let i = 0; i < positions.count; i++) {
+      uv.setXY(i, .5 + (positions.getY(i) + CENTER_Z) / artWidth,
+        (bottom - positions.getX(i)) / artLength);
+    }
+    return art;
+  }, [width, height]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <mesh position={[0, PLAY.y + .0082, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={geometry}>
+      <meshBasicMaterial map={texture} color="#e8e3ec" toneMapped={false} />
+    </mesh>
+  );
+}
+
+function Slate() {
+  const floorShape = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-HALF_L, -HALF_W);
+    shape.lineTo(DRAIN_EDGE, -HALF_W);
+    shape.lineTo(DRAIN_EDGE, HALF_W);
+    shape.lineTo(-HALF_L, HALF_W);
+    shape.closePath();
+    const opening = new THREE.Path();
+    opening.absarc(LIFT_X, -CORRIDOR_Z, .0175, 0, Math.PI * 2, true);
+    shape.holes.push(opening);
+    return shape;
+  }, []);
   return (
     <group>
-      <mesh position={[0, PLAY.y, 0]} receiveShadow>
-        <boxGeometry args={[PLAY.l, 0.016, PLAY.w]} />
-        <meshStandardMaterial color={SLATE} roughness={0.42} metalness={0.25} />
+      <mesh position={[0, PLAY.y - .008, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <extrudeGeometry args={[floorShape, { depth: .016, bevelEnabled: false, curveSegments: 20 }]} />
+        <meshStandardMaterial color={SLATE} roughness={.42} metalness={.25} />
+      </mesh>
+      <mesh position={[(DRAIN_EDGE + HALF_L) / 2, PLAY.y, (DIVIDER_Z - HALF_W) / 2]} receiveShadow>
+        <boxGeometry args={[HALF_L - DRAIN_EDGE, .016, DIVIDER_Z + HALF_W]} />
+        <meshStandardMaterial color={SLATE} roughness={.42} metalness={.25} />
       </mesh>
 
-      {lines.map((z) => (
-        <mesh key={z} position={[0, PLAY.y + 0.0085, z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[PLAY.l - 0.04, 0.0012]} />
-          <meshBasicMaterial color="#2a2f37" transparent opacity={0.45} toneMapped={false} />
-        </mesh>
-      ))}
-
+      <PlayfieldArt />
     </group>
   );
 }
@@ -448,8 +511,47 @@ function TableWalls() {
     <GltfPart
       url="/models/pinball/table_walls.glb"
       mapping={WALL_MAP}
+      hidePrefix="OuterNear"
       position={[0, PLAY.y, 0]}
     />
+  );
+}
+
+function ReturnTrough() {
+  const lift = useRef<THREE.Mesh>(null);
+  useFrame(() => {
+    if (lift.current) lift.current.position.y = shared.liftY - .004;
+  });
+  const geometry = useMemo(() => {
+    const crossSection = [
+      [DRAIN_EDGE, PLAY.y + .008],
+      [RETURN_CHANNEL_X - .009, PLAY.y - .039],
+      [RETURN_CHANNEL_X + .012, PLAY.y - .039],
+      [RETURN_BACK, PLAY.y - .006],
+    ];
+    const positions = crossSection.flatMap(([x, y]) => [
+      x!, y!, HALF_W, x!, y! - .018, DIVIDER_Z,
+    ]);
+    const trough = new THREE.BufferGeometry();
+    trough.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    trough.setIndex([0, 2, 1, 2, 3, 1, 2, 4, 3, 4, 5, 3, 4, 6, 5, 6, 7, 5]);
+    trough.computeVertexNormals();
+    return trough;
+  }, []);
+  return (
+    <group>
+      <mesh geometry={geometry} receiveShadow>
+        <meshStandardMaterial color="#343b41" roughness={.47} metalness={.55} />
+      </mesh>
+      <mesh ref={lift} position={[LIFT_X, PLAY.y + .004, CORRIDOR_Z]} receiveShadow>
+        <cylinderGeometry args={[.016, .016, .008, 24]} />
+        <meshStandardMaterial color="#60666a" roughness={.42} metalness={.65} />
+      </mesh>
+      <mesh position={[RETURN_BACK, PLAY.y - .004, 0]}>
+        <boxGeometry args={[.011, .013, PLAY.w]} />
+        <meshStandardMaterial color="#1d2327" roughness={.35} metalness={.64} />
+      </mesh>
+    </group>
   );
 }
 
@@ -634,6 +736,48 @@ function LaneArrows() {
   );
 }
 
+/** The instruction card printed on the apron at the player's end. */
+function ApronCard() {
+  const texture = useMemo(() => {
+    const w = 1024;
+    const h = 236;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d")!;
+
+    ctx.fillStyle = "#221812";
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "#6f5a33";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(7, 7, w - 14, h - 14);
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#d8c8a2";
+    ctx.font = "600 46px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText("LEFT AND RIGHT HANDLER", w / 2, 84);
+    ctx.fillStyle = "#efe4c9";
+    ctx.font = "600 44px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText("ARROW LEFT AND RIGHT", w / 2, 142);
+    ctx.fillStyle = "#c9973f";
+    ctx.font = "600 46px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText("SHOOT: SPACE", w / 2, 204);
+
+    const map = new THREE.CanvasTexture(canvas);
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.anisotropy = 8;
+    return map;
+  }, []);
+
+  const outerL = PLAY.l + RAIL * 2;
+  return (
+    <mesh position={[outerL / 2 + .055, PLAY.y - .0124, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 2]}>
+      <planeGeometry args={[0.56, 0.072]} />
+      <meshStandardMaterial map={texture} roughness={0.7} metalness={0.05} />
+    </mesh>
+  );
+}
+
 /** The plunger: a spring and shooter rod at the bottom of the lane. */
 function PlungerSpring() {
   const spring = useRef<THREE.Group>(null);
@@ -743,14 +887,31 @@ function Pinball({
   onCharge,
   onCombo,
   active,
+  locked,
+  onBallLost,
+  onPhysicsReady,
 }: {
   onScore: (v: number) => void;
   onCharge: (v: number) => void;
   onCombo: (v: number) => void;
   active: boolean;
+  locked: boolean;
+  onBallLost: () => void;
+  onPhysicsReady: () => void;
 }) {
   const activeRef = useRef(active);
   activeRef.current = active;
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
+  const lostRef = useRef(onBallLost);
+  lostRef.current = onBallLost;
+  // standing up from the table stops the arcade bed and the rolling bed at once
+  useEffect(() => {
+    if (!active) audio.silence();
+    return () => {
+      if (!active) audio.silence();
+    };
+  }, [active]);
   const { camera, gl } = useThree();
   const ballMesh = useRef<THREE.Mesh>(null);
   const ballRoot = useRef<THREE.Group>(null);
@@ -793,8 +954,9 @@ function Pinball({
   const lastVel = useRef({ x: 0, z: 0 });
   const [ready, setReady] = useState(false);
   const cleanups = useRef<(() => void)[]>([]);
-  const mode = useRef<"idle" | "play">("idle");
-  const exitCooldown = useRef(0);
+  const mode = useRef<"idle" | "play" | "return" | "over">("idle");
+  const ballReturn = useRef<BallReturn | null>(null);
+  const shooterGate = useRef<ShooterGate | null>(null);
   const flip = useRef({
     left: FLIP_REST,
     right: -FLIP_REST,
@@ -816,14 +978,20 @@ function Pinball({
       // The table is flat on screen; the slope is this constant pull toward the player.
       const w = new RAPIER.World({ x: DOWNHILL, y: -9.81, z: 0 });
       w.timestep = 1 / 240;
+      const gate = new ShooterGate(w, PLAY.y, BALL_R);
+      shooterGate.current = gate;
+
+      addTableContainment(w, PLAY.y, HALF_L, HALF_W);
 
       // Playfield floor.
-      w.createCollider(
-        RAPIER.ColliderDesc.cuboid(HALF_L, 0.008, HALF_W)
-          .setTranslation(0, PLAY.y, 0)
-          .setFriction(0.08)
-          .setRestitution(0.18),
-      );
+      for (const { x0, x1, z0, z1 } of BED_SECTIONS) {
+        w.createCollider(
+          RAPIER.ColliderDesc.cuboid((x1 - x0) / 2, .008, (z1 - z0) / 2)
+            .setTranslation((x0 + x1) / 2, PLAY.y, (z0 + z1) / 2)
+            .setFriction(.08)
+            .setRestitution(.18),
+        );
+      }
 
       const box = (
         hx: number,
@@ -859,26 +1027,6 @@ function Pinball({
             )
             .setFriction(0.06)
             .setRestitution(0.55),
-        );
-      }
-
-      // Head curve, corridor divider and lane exit: colliders built from the same
-      // segment list Blender used to model them, so mesh and physics cannot drift.
-      for (const seg of WALLS.segments) {
-        const dx = seg.x1 - seg.x0;
-        const dz = seg.z1 - seg.z0;
-        const len = Math.hypot(dx, dz);
-        if (len < 1e-5) continue;
-        w.createCollider(
-          RAPIER.ColliderDesc.cuboid(len / 2, seg.halfHeight, seg.halfWidth)
-            .setTranslation(
-              (seg.x0 + seg.x1) / 2,
-              PLAY.y + seg.halfHeight,
-              (seg.z0 + seg.z1) / 2,
-            )
-            .setRotation(quatFromY(Math.atan2(-dz, dx)))
-            .setFriction(0.04)
-            .setRestitution(0.5),
         );
       }
 
@@ -989,7 +1137,7 @@ function Pinball({
       // Ball: starts in the corridor, held until the plunger fires.
       const ball = w.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
-          .setTranslation(PLUNGER_X, PLAY.y + BALL_R + 0.02, CORRIDOR_Z)
+          .setTranslation(PLUNGER_X, PLUNGER_Y, CORRIDOR_Z)
           .setLinearDamping(0.04)
           .setAngularDamping(0.4)
           .setCcdEnabled(true),
@@ -1068,6 +1216,8 @@ function Pinball({
         if (!ball || !world.current) return;
         mode.current = "play";
         try {
+          if (z < DIVIDER_Z && x > -.31) gate.open();
+          else gate.close();
           ball.setTranslation({ x, y: PLAY.y + 0.03, z }, true);
           ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
         } catch {
@@ -1113,6 +1263,7 @@ function Pinball({
       shared.onScore = onScore;
       shared.onCombo = onCombo;
       setReady(true);
+      onPhysicsReady();
 
       // Keyboard: Space charges the plunger, arrows/A-D work the flippers.
       const down = (e: KeyboardEvent) => {
@@ -1122,7 +1273,7 @@ function Pinball({
 
         if (e.code === "Space") {
           e.preventDefault();
-          if (mode.current === "idle") shared.plungerHeld = true;
+          if (mode.current === "idle" && !e.repeat) shared.plungerHeld = true;
           return;
         }
         if (e.code === "ArrowLeft" || e.code === "KeyA") {
@@ -1143,9 +1294,9 @@ function Pinball({
           mode.current = "play";
           (window as unknown as { __fires?: number }).__fires =
             ((window as unknown as { __fires?: number }).__fires ?? 0) + 1;
-          // Charge 0..1 maps onto 1.6..5.4 m/s.
-          const speed = 1.4 + shared.charge * 2.9;
-          audio.plunge(shared.charge);
+          const speed = launchSpeed(shared.charge);
+          audio.launch(shared.charge);
+          gate.open();
           ball.setLinvel({ x: -speed, y: 0, z: 0 }, true);
           (window as unknown as { __fireVel?: unknown }).__fireVel = ball.linvel();
           shared.charge = 0;
@@ -1174,6 +1325,7 @@ function Pinball({
       cleanups.current = [];
       myWorld?.free();
       if (world.current === myWorld) world.current = null;
+      shooterGate.current = null;
       if (events.current === myEvents) events.current = null;
       if (shared.ball === myBall) shared.ball = null;
       // Drop the live handle too, and the debug hooks with it: a stale handle points
@@ -1195,7 +1347,7 @@ function Pinball({
     const ball = shared.ball;
     if (!ball) return;
     ball.setTranslation(
-      { x: PLUNGER_X, y: PLAY.y + BALL_R + 0.02, z: CORRIDOR_Z },
+      LOADED_BALL,
       true,
     );
     ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -1205,6 +1357,7 @@ function Pinball({
   }, [onCharge]);
 
   useFrame((_, delta) => {
+    if (!activeRef.current) return;
     const w = world.current;
     const ball = liveBall.current;
     if (!w || !ball) return;
@@ -1214,7 +1367,7 @@ function Pinball({
     {
       const v = ball.linvel();
       const speedNow = Math.hypot(v.x, v.z);
-      audio.roll(speedNow);
+      audio.roll(ballReturn.current?.speed ?? speedNow);
 
       const prev = lastVel.current;
       const dv = Math.hypot(v.x - prev.x, v.z - prev.z);
@@ -1237,7 +1390,7 @@ function Pinball({
     // Rest the ball against the plunger while the lane is loaded.
     if (mode.current === "idle") {
       ball.setTranslation(
-        { x: PLUNGER_X + shared.charge * 0.016, y: PLAY.y + BALL_R + 0.02, z: CORRIDOR_Z },
+        { x: PLUNGER_X + shared.charge * .016, y: PLUNGER_Y, z: CORRIDOR_Z },
         true,
       );
       ball.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -1268,6 +1421,7 @@ function Pinball({
     try {
       while (acc.current >= w.timestep && steps < 12) {
         w.step(queue);
+        if (mode.current === "play") shooterGate.current?.step(ball);
         acc.current -= w.timestep;
         steps += 1;
       }
@@ -1282,7 +1436,7 @@ function Pinball({
 
     if (queue) {
       queue.drainCollisionEvents((h1, h2, started) => {
-        if (!started) return;
+        if (!started || mode.current !== "play") return;
         const value = scoring.current[h1] ?? scoring.current[h2];
         if (value) {
           // Each hit lands for more while the chain is warm.
@@ -1344,6 +1498,23 @@ function Pinball({
           );
         }
       });
+    }
+
+    const returning = ballReturn.current;
+    if (returning) {
+      const loaded = returning.step(delta);
+      ballRoot.current?.position.copy(returning.position);
+      ballRoot.current?.quaternion.copy(returning.rotation);
+      shared.liftY = returning.liftHeight - BALL_R;
+      if (loaded) {
+        ballReturn.current = null;
+        ball.setRotation(returning.rotation, true);
+        resetBall();
+        ball.setEnabled(!lockedRef.current);
+        mode.current = lockedRef.current ? "over" : "idle";
+        audio.impact(.22);
+      }
+      return;
     }
 
     const t = ball.translation();
@@ -1474,56 +1645,46 @@ function Pinball({
       }
     }
 
-    // Lane exit. The shooter lane ends in a gate on a real table; here the ball is
-    // turned into the field the moment it reaches the top of the lane, once per
-    // approach, so it can never come back down the chute.
-    if (mode.current === "play") {
-      const here = ball.translation();
-      const now = performance.now();
-      const v = ball.linvel();
-      // Strictly inside the lane (not the field) and still travelling up it.
-      if (
-        here.x < -0.24 &&
-        here.z < DIVIDER_Z - 0.004 &&
-        here.z > -0.262 &&
-        v.x < 0.3 &&
-        now > exitCooldown.current
-      ) {
-        const speed = Math.max(2.4, Math.hypot(v.x, v.z));
-        ball.setLinvel({ x: -0.32 * speed, y: 0, z: 0.95 * speed }, true);
-        exitCooldown.current = now + 700;
-      }
-    }
-
-    // The ball has rolled back down the lane onto the plunger: re-arm it so the
-    // spring can be pulled again.
+    // An interrupted launch can settle at the spring. A ball in play must drain first.
     if (
       mode.current === "play" &&
+      shooterGate.current?.launching &&
       t.z < DIVIDER_Z &&
       t.x > PLUNGER_X - 0.03 &&
       Math.hypot(ball.linvel().x, ball.linvel().z) < 0.35
     ) {
+      shooterGate.current.close();
       mode.current = "idle";
-      shared.charge = 0;
-      onCharge(0);
       resetBall();
     }
 
-    // Drained: past the flippers into the field, or under the playfield.
+    // Let Rapier carry it beyond the flippers. The recessed trough then guides it to the shooter.
     if (mode.current === "play") {
-      if (t.y < PLAY.y - 0.08 || (t.x > 0.45 && t.z > DIVIDER_Z + 0.012)) {
+      const inTrough = t.x >= DRAIN_EDGE && t.z > DIVIDER_Z &&
+        (ball.linvel().x >= 0 || t.y < PLUNGER_Y - .012);
+      if (inTrough || t.y < PLAY.y - .08) {
         audio.drain();
-        mode.current = "idle";
+        lostRef.current();
+        shared.plungerHeld = false;
         shared.charge = 0;
         onCharge(0);
-        resetBall();
+        mode.current = "return";
+        const start = inTrough
+          ? new THREE.Vector3(t.x, t.y, t.z)
+          : new THREE.Vector3(DRAIN_EDGE, PLAY.y - .019, CENTER_Z);
+        const velocity = ball.linvel();
+        ballReturn.current = new BallReturn(
+          start, new THREE.Quaternion(r.x, r.y, r.z, r.w),
+          new THREE.Vector3(velocity.x, velocity.y, velocity.z), LOADED_BALL, BALL_R,
+        );
+        ball.setEnabled(false);
       }
     }
   });
 
   return (
     <>
-      <group ref={ballRoot} position={[0, PLAY.y + BALL_R, 0]}>
+      <group ref={ballRoot} position={[LOADED_BALL.x, LOADED_BALL.y, LOADED_BALL.z]}>
         <primitive object={ballModel} />
       </group>
 
@@ -1544,7 +1705,40 @@ function quatFromY(angle: number): { x: number; y: number; z: number; w: number 
 
 // ------------------------------------------------------------------ cabinet shell
 
-function Cabinet() {
+function BackboxLcd({ score, chain, balls }: { score: number; chain: number; balls: number }) {
+  const { ctx, texture } = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = LCD_WIDTH;
+    canvas.height = LCD_HEIGHT;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return { ctx: canvas.getContext("2d"), texture };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!ctx) return;
+    drawPinballLcd(ctx, score, chain, balls);
+    texture.needsUpdate = true;
+  }, [ctx, texture, score, chain, balls]);
+  useEffect(() => () => texture.dispose(), [texture]);
+
+  const height = .2;
+  const width = height * LCD_WIDTH / LCD_HEIGHT;
+  return (
+    <group position={[.069, .01, 0]} rotation={[0, Math.PI / 2, 0]}>
+      <RoundedBox args={[width + .026, height + .027, .016]} radius={.006} smoothness={3}>
+        <meshStandardMaterial color="#282520" metalness={.55} roughness={.35} />
+      </RoundedBox>
+      <mesh position={[0, 0, .0082]}>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial map={texture} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
+function Cabinet({ score, chain, balls, mobile = false }: { score: number; chain: number; balls: number; mobile?: boolean }) {
   const textures = useMemo(() => makeWoodTextures(), []);
   const wood = useMemo(
     () =>
@@ -1564,12 +1758,13 @@ function Cabinet() {
   return (
     <group>
       <Slate />
-      {/* Frame: one mitered ring from Blender, so the corners join. */}
-      <GltfPart
-        url="/models/pinball/cabinet_frame.glb"
-        mapping={{ CabinetFrame: wood }}
-        position={[0, PLAY.y - 0.0475, 0]}
-      />
+      {!mobile && (
+        <GltfPart
+          url="/models/pinball/cabinet_frame.glb"
+          mapping={{ CabinetFrame: wood }}
+          position={[0, PLAY.y - 0.0475, 0]}
+        />
+      )}
 
       {BUMPERS.map((b, i) => (
         <Bumper key={i} id={i} x={b.x} z={M(b.dz)} color={b.color} />
@@ -1579,6 +1774,7 @@ function Cabinet() {
       <RolloverRing z={M(0)} />
 
       <PlungerSpring />
+      <ApronCard />
       <LaneArrows />
       <Slingshot side={1} />
       <Slingshot side={-1} />
@@ -1591,13 +1787,26 @@ function Cabinet() {
       <TopArrows />
       <TopBumper />
       <TableWalls />
+      <ReturnTrough />
 
+      {!mobile && (
+      <>
       {/* Cabinet body: the box the playfield drops into. */}
       <RoundedBox
-        args={[outerL + 0.05, 0.24, outerW + 0.05]}
+        args={[outerL / 2 + .025 + DRAIN_EDGE, .24, outerW + .05]}
         radius={0.01}
         smoothness={3}
-        position={[0, PLAY.y - 0.145, 0]}
+        position={[(DRAIN_EDGE - outerL / 2 - .025) / 2, PLAY.y - .145, 0]}
+        castShadow
+        receiveShadow
+      >
+        <primitive object={wood} attach="material" />
+      </RoundedBox>
+      <RoundedBox
+        args={[outerL / 2 + .025 - DRAIN_EDGE, .168, outerW + .05]}
+        radius={.01}
+        smoothness={3}
+        position={[(DRAIN_EDGE + outerL / 2 + .025) / 2, PLAY.y - .181, 0]}
         castShadow
         receiveShadow
       >
@@ -1609,7 +1818,7 @@ function Cabinet() {
         args={[0.085, 0.13, outerW * 0.9]}
         radius={0.008}
         smoothness={2}
-        position={[outerL / 2 + 0.055, PLAY.y + 0.015, 0]}
+        position={[outerL / 2 + .055, PLAY.y - .078, 0]}
         castShadow
         receiveShadow
       >
@@ -1667,11 +1876,7 @@ function Cabinet() {
         >
           <primitive object={wood} attach="material" />
         </RoundedBox>
-        {/* Dark display face. */}
-        <mesh position={[0.068, 0.01, 0]} rotation={[0, Math.PI / 2, 0]}>
-          <planeGeometry args={[outerW * 0.72, 0.2]} />
-          <meshStandardMaterial color="#07080a" roughness={0.35} metalness={0.2} />
-        </mesh>
+        <BackboxLcd score={score} chain={chain} balls={balls} />
         {/* Lid, hinged at the top and standing open. */}
         <group position={[-0.015, 0.175, 0]} rotation={[0, 0, 0.55]}>
           <RoundedBox
@@ -1685,6 +1890,8 @@ function Cabinet() {
           </RoundedBox>
         </group>
       </group>
+      </>
+      )}
     </group>
   );
 }
@@ -1696,27 +1903,140 @@ useGLTF.preload("/models/pinball/slingshot.glb");
 useGLTF.preload("/models/pinball/lane_arm.glb");
 useGLTF.preload("/models/pinball/lane_arm_right.glb");
 
+function BackglassScreen({ score, chain, balls }: { score: number; chain: number; balls: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [resizeTick, setResizeTick] = useState(0);
+  useEffect(() => {
+    const on = () => setResizeTick((n) => n + 1);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  useLayoutEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = canvas.clientWidth || 1;
+    const h = canvas.clientHeight || 1;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.save();
+    ctx.scale(w / LCD_WIDTH, h / LCD_HEIGHT);
+    drawPinballLcd(ctx, score, chain, balls);
+    ctx.restore();
+  }, [score, chain, balls, resizeTick]);
+  return <canvas ref={ref} className="h-full w-full" aria-hidden="true" />;
+}
+
+/** A phone looks straight down the playfield: long axis up, flippers at the bottom. */
+function TableCamera({ mobile }: { mobile: boolean }) {
+  const camera = useThree(({ camera }) => camera);
+  const { width, height } = useThree(({ size }) => size);
+  useLayoutEffect(() => {
+    if (!mobile || !width || !height) return;
+    const cam = camera as THREE.PerspectiveCamera;
+    const aspect = width / height;
+    const fov = (cam.fov * Math.PI) / 180;
+    const visible = Math.max(1.16, 0.58 / aspect);
+    const distance = visible / (2 * Math.tan(fov / 2));
+    cam.position.set(0, PLAY.y + distance, 0);
+    cam.up.set(-1, 0, 0);
+    cam.lookAt(0, PLAY.y, 0);
+    cam.updateProjectionMatrix();
+  }, [mobile, camera, width, height]);
+  return null;
+}
+
+/** A thumb key that presses the same keyboard code the table already listens for. */
+function ThumbKey({ code, label, children }: { code: string; label: string; children: React.ReactNode }) {
+  const send = (type: "keydown" | "keyup") =>
+    window.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true }));
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        send("keydown");
+      }}
+      onPointerUp={() => send("keyup")}
+      onPointerCancel={() => send("keyup")}
+      onLostPointerCapture={() => send("keyup")}
+      onContextMenu={(event) => event.preventDefault()}
+      className="pointer-events-auto flex h-16 w-16 touch-none select-none items-center justify-center rounded-full border border-[#c9973f]/45 bg-black/55 text-[#f0e6cf] backdrop-blur-[2px] active:border-[#c9973f] active:bg-black/75"
+    >
+      {children}
+    </button>
+  );
+}
+
 /** Kept mounted once opened, so the physics world is never torn down mid-frame. */
-export function PinballTable({ onExit, active = true }: { onExit: () => void; active?: boolean }) {
+export function PinballTable({ onExit, onReady, loadingId, active = true }: {
+  onExit: () => void;
+  onReady?: () => void;
+  loadingId?: number;
+  active?: boolean;
+}) {
+  const [physicsReady, setPhysicsReady] = useState(false);
+  const markPhysicsReady = useCallback(() => setPhysicsReady(true), []);
   const [score, setScore] = useState(0);
   const [charge, setCharge] = useState(0);
   const [combo, setCombo] = useState(0);
-  const [best, setBest] = useState(0);
+  const [balls, setBalls] = useState(BALLS_PER_RUN);
+  const [over, setOver] = useState(false);
+  const [round, setRound] = useState(0);
+  const best = useRef(0);
+  /** Phones get the bare playfield and a flat backglass instead of the cabinet. */
+  const [coarse] = useState(() => typeof window !== "undefined"
+    && window.matchMedia("(pointer: coarse)").matches);
 
-  useEffect(() => {
-    const v = Number(window.localStorage.getItem("imarket:pinball:best") || 0);
-    if (v > 0) setBest(v);
+  /** A ball down the drain costs one of the five. The fifth ends the run. */
+  const loseBall = useCallback(() => {
+    setBalls((left) => {
+      const next = Math.max(0, left - 1);
+      if (next === 0) setOver(true);
+      return next;
+    });
   }, []);
 
   useEffect(() => {
-    if (score > best) {
-      setBest(score);
+    if (!import.meta.env.DEV) return;
+    (window as unknown as { __pinballLoseBall?: () => void }).__pinballLoseBall = loseBall;
+  }, [loseBall]);
+
+  const replay = useCallback(() => {
+    setScore(0);
+    setCombo(0);
+    setCharge(0);
+    setBalls(BALLS_PER_RUN);
+    setOver(false);
+    setRound((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
+    const v = Number(window.localStorage.getItem("imarket:pinball:best") || 0);
+    if (v > 0) best.current = v;
+  }, []);
+
+  useEffect(() => {
+    if (score > best.current) {
+      best.current = score;
       window.localStorage.setItem("imarket:pinball:best", String(score));
     }
-  }, [score, best]);
+  }, [score]);
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-[#050506]">
+    <div className="relative h-dvh w-full overflow-hidden bg-[#24180f]">
+      <div className="absolute inset-0 flex flex-col">
+      {coarse && (
+        <div className="relative h-[14dvh] w-full shrink-0">
+          <BackglassScreen score={score} chain={1 + combo} balls={balls} />
+        </div>
+      )}
+      <div className="relative min-h-0 flex-1">
       <Canvas
         shadows="percentage"
         frameloop={active ? "always" : "never"}
@@ -1725,8 +2045,8 @@ export function PinballTable({ onExit, active = true }: { onExit: () => void; ac
         gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         onCreated={({ camera }) => camera.lookAt(0, PLAY.y + 0.02, 0)}
       >
-        <color attach="background" args={["#050506"]} />
-        <fog attach="fog" args={["#050506", 3.5, 14]} />
+        <color attach="background" args={["#24180f"]} />
+        <fog attach="fog" args={["#24180f", 7, 24]} />
 
         <ambientLight intensity={0.28} />
         <spotLight
@@ -1752,47 +2072,92 @@ export function PinballTable({ onExit, active = true }: { onExit: () => void; ac
         />
         <directionalLight position={[1.2, 2.4, 1.2]} intensity={0.8} color="#ffe9c8" castShadow />
 
-        <Cabinet />
-        <Pinball onScore={setScore} onCharge={setCharge} onCombo={setCombo} active={active} />
+        <ReadySignal key={loadingId} enabled={physicsReady} onReady={onReady} />
+        <TableCamera mobile={coarse} />
+        <Cabinet score={score} chain={1 + combo} balls={balls} mobile={coarse} />
+        <Pinball
+          key={round}
+          onScore={setScore}
+          onCharge={setCharge}
+          onCombo={setCombo}
+          active={active && loadingId === undefined}
+          onPhysicsReady={markPhysicsReady}
+          locked={over}
+          onBallLost={loseBall}
+        />
 
-        <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <planeGeometry args={[16, 16]} />
-          <meshStandardMaterial color="#060606" roughness={1} metalness={0} />
-        </mesh>
+        {!coarse && <BlurredBarFloor />}
       </Canvas>
 
-      {/* HUD */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 sm:p-6">
-        <div className="flex items-start justify-between">
-          <div>
+      <div className="absolute right-3 top-3 z-10 flex gap-2">
+        <MuteButton />
+        <button
+          type="button"
+          onClick={onExit}
+          className="key-pill pointer-events-auto flex min-h-11 min-w-11 items-center justify-center rounded-full border border-[#3a4a40] bg-black/60 px-4 py-2 font-display text-[10px] uppercase tracking-[0.18em] text-[#b9c8bd] hover:border-[#c9973f]/60 hover:text-[#efe6d6]"
+        >
+          Stand up
+        </button>
+      </div>
+      </div>
+      </div>
+
+      {coarse && (
+        <>
+          <div className="pointer-events-none absolute inset-x-4 bottom-28 flex items-end justify-between">
+            <ThumbKey code="ArrowLeft" label="Left flipper">
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6">
+                <path d="M15 4 7 12l8 8" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </ThumbKey>
+            <ThumbKey code="ArrowRight" label="Right flipper">
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6">
+                <path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </ThumbKey>
+          </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] flex justify-center">
+            <ThumbKey code="Space" label="Shoot">
+              <span className="font-display text-[12px] uppercase tracking-[0.2em]">Shoot</span>
+            </ThumbKey>
+          </div>
+        </>
+      )}
+
+      {over && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <div className="pointer-events-auto flex flex-col items-center gap-4 border border-white/15 bg-black/45 px-10 py-7 text-center backdrop-blur-[3px]">
+            <p
+              className="text-3xl font-black uppercase leading-none tracking-[0.22em] text-[#ec3a2c]"
+              style={{
+                textShadow:
+                  "0 1px 0 #b31f14, 0 2px 0 #a51b11, 0 3px 0 #96170e, 0 4px 0 #86130b, 0 5px 0 #750f08, 0 8px 14px rgba(0,0,0,.65)",
+              }}
+            >
+              Game Over
+            </p>
+            <p className="text-5xl tabular-nums tracking-[0.04em] text-[#f4efe4]">
+              {score}
+              <span className="ml-2 font-display text-sm uppercase tracking-[0.2em] text-[#a8b6ab]">points</span>
+            </p>
+            <p className="font-display text-[11px] uppercase tracking-[0.24em] text-[#a8b6ab]">
+              {BALLS_PER_RUN} balls played
+            </p>
             <button
               type="button"
-              onClick={onExit}
-              className="key-pill pointer-events-auto mb-3 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/50 px-3 py-1.5 font-display text-[10px] uppercase tracking-[0.2em] text-zinc-400 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none"
+              onClick={replay}
+              aria-label="Play again"
+              className="mt-1 flex h-16 w-16 items-center justify-center rounded-full bg-[#c8362b] text-[#fff3ee] shadow-[0_6px_0_#7e1f18,0_12px_24px_rgba(0,0,0,.45)] transition-transform duration-100 ease-out hover:bg-[#d13f33] active:translate-y-[3px] active:scale-[.94] active:shadow-[0_2px_0_#7e1f18,0_4px_10px_rgba(0,0,0,.4)]"
             >
-              <span aria-hidden="true">&larr;</span> Bar
+              <svg viewBox="0 0 24 24" className="h-7 w-7 fill-current" aria-hidden="true">
+                <path d="M8 5.5v13l11-6.5-11-6.5Z" />
+              </svg>
             </button>
-            <p className="font-display text-[10px] uppercase tracking-[0.2em] text-zinc-500">Score</p>
-            <p className="font-display text-2xl tabular-nums text-zinc-100">{score}</p>
-          </div>
-          <div className="text-center">
-            <p className="font-display text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-              Chain
-            </p>
-            <p
-              className={`font-display text-2xl tabular-nums ${
-                combo > 0 ? "text-amber-300" : "text-zinc-600"
-              }`}
-            >
-              x{1 + combo}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="font-display text-[10px] uppercase tracking-[0.2em] text-zinc-500">Best</p>
-            <p className="font-display text-2xl tabular-nums text-zinc-100">{best}</p>
           </div>
         </div>
-
+      )}
+      <div className="sr-only">Score {score}. Chain ×{1 + combo}. Balls remaining {balls}.</div>
+      <div className="pointer-events-none absolute inset-0 flex flex-col justify-end p-4 sm:p-6">
         <div className="mx-auto mb-24 w-40">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
             <div
@@ -1800,9 +2165,6 @@ export function PinballTable({ onExit, active = true }: { onExit: () => void; ac
               style={{ width: `${Math.round(charge * 100)}%` }}
             />
           </div>
-          <p className="mt-1 text-center font-display text-[9px] uppercase tracking-[0.16em] text-zinc-400">
-            hold space · release to launch
-          </p>
         </div>
       </div>
     </div>

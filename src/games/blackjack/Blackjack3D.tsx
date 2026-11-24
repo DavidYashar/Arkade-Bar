@@ -1,6 +1,7 @@
-import { useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useGLTF, useTexture } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
+import { DoubleSide } from 'three';
 import type { Group, Mesh } from 'three';
 import type { Rank } from './strategy';
 import { cardArt, dealSuits, BACK_ART, SUITS } from './deck';
@@ -15,19 +16,30 @@ useTexture.preload('/cards/back.webp');
 
 export const CARD_W = 0.20;
 export const CARD_H = 0.28;
+export const BLACKJACK_TABLE_XZ = [0, 2] as const;
 const TABLE_Y = 0.862;
 
-/** Where a card comes from, and how long it takes to land. */
-const SHOE: [number, number, number] = [0.95, 0.95, 0.05];
+/**
+ * Where a card comes from, and how long it takes to land. The shoe has to sit inside
+ * the seated camera's frame, or a card spends its flight off screen and simply appears
+ * on the felt. Straight down from 2.15 with a 90 degree lens, the felt is visible from
+ * z 0.8 to 3.2 at card height, so the shoe sits just inside that edge.
+ */
+const SHOE: [number, number, number] = [0.85, 0.95, 0.9];
 export const DEAL_S = 0.32;
 
 /** When the player's n-th card leaves the shoe, in seconds. The opening pair is
  * spaced so the deal reads player, dealer, player, dealer; a hit card flies at once. */
 export const playerDelay = (index: number) => (index === 1 ? 0.32 : 0);
 
-export function BlackjackTable() {
+export function BlackjackTable({ receiveShadow = false }: { receiveShadow?: boolean }) {
   const gltf = useGLTF('/models/bar/table.glb');
-  return <primitive object={gltf.scene} position={[0, 0, 2.0]} />;
+  useLayoutEffect(() => {
+    gltf.scene.traverse((node) => {
+      if ((node as Mesh).isMesh) node.receiveShadow = receiveShadow;
+    });
+  }, [gltf.scene, receiveShadow]);
+  return <primitive object={gltf.scene} position={[BLACKJACK_TABLE_XZ[0], 0, BLACKJACK_TABLE_XZ[1]]} />;
 }
 
 useGLTF.preload('/models/bar/table.glb');
@@ -77,9 +89,9 @@ function Card({ rank, suit, down, target, delay, tilt = 0 }: CardProps) {
 
   return (
     <group ref={root}>
-      <mesh>
+      <mesh castShadow>
         <planeGeometry args={[CARD_W, CARD_H]} />
-        <meshStandardMaterial map={texture} roughness={0.5} metalness={0.02} />
+        <meshStandardMaterial map={texture} roughness={0.5} metalness={0.02} shadowSide={DoubleSide} />
       </mesh>
     </group>
   );
@@ -111,9 +123,9 @@ function HoleCard({ rank, suit, down, target, delay, tilt = 0 }: CardProps) {
   return (
     <group ref={root}>
       <group ref={flip}>
-        <mesh>
+        <mesh castShadow>
           <planeGeometry args={[CARD_W, CARD_H]} />
-          <meshStandardMaterial map={back} roughness={0.5} metalness={0.02} />
+          <meshStandardMaterial map={back} roughness={0.5} metalness={0.02} shadowSide={DoubleSide} />
         </mesh>
         <mesh rotation={[Math.PI, 0, 0]}>
           <planeGeometry args={[CARD_W, CARD_H]} />

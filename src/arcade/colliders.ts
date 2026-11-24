@@ -11,6 +11,22 @@ export type Box = {
   maxZ: number;
 };
 
+export const PINBALL_AT = [-5.55, 2.2] as const;
+export const BRICK_BLITZ_AT = [5.50, 2.15] as const;
+// The jukebox uses its flat back as the origin, just inside the wall lining.
+export const JUKEBOX_AT = [6.856, -3.15] as const;
+export const CHESTERFIELD_AT = [3.55, JUKEBOX_AT[1]] as const;
+export const ENTRANCE_COUCH_AT = [-4.30, 6.80] as const;
+export const ENTRANCE_TABLE_AT = [ENTRANCE_COUCH_AT[0], 4.95] as const;
+// the cocktail table stands against the left wall past the pinball, head to the wall
+export const NARROWS_AT = [-5.76, -1.28] as const;
+export const NARROWS_YAW = Math.PI / 2;
+// built at 1.67 by 0.99, scaled to sit beside the pinball at the same size
+export const NARROWS_SCALE = 1.3;
+export const NARROWS_REACH = 2.7;
+export const ENTRANCE_PLANTERS = [[-3.2, 10], [3.2, 10]] as const;
+export const INTERIOR_PLANTERS = [[-6.0, 7.95], [6.0, 7.95], [-6.0, -7.95], [6.0, -7.95]] as const;
+
 export const WALLS: Box[] = [
   // back wall, and the two side walls
   { minX: -7, maxX: 7, minZ: -9.2, maxZ: -8.9 },
@@ -27,25 +43,34 @@ export const WALLS: Box[] = [
 
 export const FURNITURE: Box[] = [
   // the bar counter and the back bar
-  { minX: -3.6, maxX: 3.6, minZ: -7.7, maxZ: -7.05 },
-  { minX: -3.5, maxX: 3.5, minZ: -8.9, maxZ: -8.55 },
+  { minX: -4.09, maxX: 4.09, minZ: -7.54, maxZ: -6.56 },
+  { minX: -3.67, maxX: 3.67, minZ: -8.9, maxZ: -8.32 },
   // the card table
   { minX: -1.15, maxX: 1.15, minZ: 1.4, maxZ: 2.6 },
-  // two game tables
-  { minX: -4.2, maxX: -2.7, minZ: 5.1, maxZ: 6.1 },
-  { minX: 2.7, maxX: 4.2, minZ: 5.1, maxZ: 6.1 },
-  { minX: -4.0, maxX: -2.5, minZ: -3.1, maxZ: -2.1 },
-  { minX: 2.5, maxX: 4.0, minZ: -3.1, maxZ: -2.1 },
   // the lounge
-  { minX: -5.4, maxX: -3.2, minZ: 6.2, maxZ: 7.2 },
-  { minX: -5.0, maxX: -3.6, minZ: 4.5, maxZ: 5.3 },
-  // the pinball machine on the left wall, and two cabinets on the right
-  { minX: -7.0, maxX: -5.4, minZ: 1.85, maxZ: 2.55 },
-  { minX: 5.4, maxX: 7.0, minZ: 2.0, maxZ: 2.9 },
-  { minX: 5.4, maxX: 7.0, minZ: 0.2, maxZ: 1.1 },
+  { minX: ENTRANCE_COUCH_AT[0] - 1.30, maxX: ENTRANCE_COUCH_AT[0] + 1.30,
+    minZ: ENTRANCE_COUCH_AT[1] - .54, maxZ: ENTRANCE_COUCH_AT[1] + .50 },
+  { minX: ENTRANCE_TABLE_AT[0] - .70, maxX: ENTRANCE_TABLE_AT[0] + .70,
+    minZ: ENTRANCE_TABLE_AT[1] - .33, maxZ: ENTRANCE_TABLE_AT[1] + .33 },
+  // the pinball machine on the left wall
+  { minX: PINBALL_AT[0] - 1.18, maxX: PINBALL_AT[0] + 1.01,
+    minZ: PINBALL_AT[1] - 0.54, maxZ: PINBALL_AT[1] + 0.54 },
+  { minX: BRICK_BLITZ_AT[0] - 1.34, maxX: BRICK_BLITZ_AT[0] + 1.23,
+    minZ: BRICK_BLITZ_AT[1] - 0.90, maxZ: BRICK_BLITZ_AT[1] + 0.90 },
+  { minX: JUKEBOX_AT[0] - .70, maxX: JUKEBOX_AT[0],
+    minZ: JUKEBOX_AT[1] - .57, maxZ: JUKEBOX_AT[1] + .57 },
+  { minX: CHESTERFIELD_AT[0] - .50, maxX: CHESTERFIELD_AT[0] + .54,
+    minZ: CHESTERFIELD_AT[1] - 1.30, maxZ: CHESTERFIELD_AT[1] + 1.30 },
+  // turned with its head to the wall, so it is deep in x and narrow in z
+  { minX: NARROWS_AT[0] - .82 * NARROWS_SCALE, maxX: NARROWS_AT[0] + .82 * NARROWS_SCALE,
+    minZ: NARROWS_AT[1] - .50 * NARROWS_SCALE, maxZ: NARROWS_AT[1] + .50 * NARROWS_SCALE },
   // the planters on the pavement
-  { minX: -3.7, maxX: -2.7, minZ: 9.6, maxZ: 10.4 },
-  { minX: 2.7, maxX: 3.7, minZ: 9.6, maxZ: 10.4 },
+  ...ENTRANCE_PLANTERS.map(([x, z]) => ({
+    minX: x - 0.30, maxX: x + 0.30, minZ: z - 0.30, maxZ: z + 0.30,
+  })),
+  ...INTERIOR_PLANTERS.map(([x, z]) => ({
+    minX: x - 0.34, maxX: x + 0.34, minZ: z - 0.34, maxZ: z + 0.34,
+  })),
 ];
 
 /** The closed leaves. They step aside while the door is open. */

@@ -1,5 +1,6 @@
 import { readHand } from './strategy';
 import { POINTS, roundTotal } from './score';
+import { MuteButton } from '@/arcade/MuteButton';
 import type { BlackjackState } from './useBlackjack';
 
 const clock = (seconds: number) => {
@@ -165,14 +166,16 @@ export function GameOverlay({
           </p>
 
           <div
-            className="line-rise mt-4 flex gap-2"
+            className="line-rise mt-4 flex justify-center"
             style={{ animationDelay: `${180 + state.results.length * 45 + 140}ms` }}
           >
-            <button type="button" onClick={onRestart} className="key key-gold flex-1">
+            <button
+              type="button"
+              onClick={onRestart}
+              className="key key-gold"
+              style={{ flex: '0 0 auto', minWidth: '11rem' }}
+            >
               Deal again
-            </button>
-            <button type="button" onClick={onLeave} className="key key-ghost flex-1">
-              Stand up
             </button>
           </div>
         </div>

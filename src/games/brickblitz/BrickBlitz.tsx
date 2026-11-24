@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 
 import { brickAudio } from './audio';
@@ -7,6 +7,10 @@ import { RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 import type { Mesh } from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
+import { BlurredBarFloor } from "@/arcade/BlurredBarFloor";
+import { ReadySignal } from "@/arcade/ReadySignal";
+import { MuteButton } from "@/arcade/MuteButton";
+import { drawLcdBacklight, drawLcdDigits, lcdInk } from "@/arcade/lcd";
 
 import { makeBallTexture, makeShadowTexture } from './ball-skin';
 import { makeBrickTextures } from './brick-skins';
@@ -36,6 +40,13 @@ const SPAWN_X = -0.98;
 const MIDLINE_X = 0;
 const START_ROWS = 5;
 const ROW_SECONDS = 10;
+/** The wall tightens as it is cleared: the row interval by bricks destroyed. */
+const rowIntervalFor = (destroyed: number) => {
+  if (destroyed >= 60) return 4;
+  if (destroyed >= 40) return 6;
+  if (destroyed >= 20) return 8;
+  return ROW_SECONDS;
+};
 
 type BrickKind = "clay" | "stone" | "keg" | "gold" | "glass" | "iron";
 
@@ -444,6 +455,25 @@ function EnvSetup() {
     };
   }, [gl, scene]);
 
+  return null;
+}
+
+/** A phone looks straight down the bed, the far wall at the top. */
+function BedCamera({ mobile }: { mobile: boolean }) {
+  const camera = useThree(({ camera }) => camera);
+  const { width, height } = useThree(({ size }) => size);
+  useLayoutEffect(() => {
+    if (!mobile || !width || !height) return;
+    const cam = camera as THREE.PerspectiveCamera;
+    const aspect = width / height;
+    const fov = (cam.fov * Math.PI) / 180;
+    const visible = Math.max(2.6, 1.5 / aspect);
+    const distance = visible / (2 * Math.tan(fov / 2));
+    cam.position.set(0, BED.y + distance, 0);
+    cam.up.set(-1, 0, 0);
+    cam.lookAt(0, BED.y, 0);
+    cam.updateProjectionMatrix();
+  }, [mobile, camera, width, height]);
   return null;
 }
 
@@ -879,7 +909,88 @@ function Physics({
   );
 }
 
-function Table() {
+interface BrickBlitzReadout {
+  brickCount: number;
+  score: number;
+  nextRowIn: number;
+}
+
+const LCD_W = 960;
+const LCD_H = 320;
+
+/** What the cabinet face reads out, at the motherboard's own resolution. */
+function paintBrickLcd(
+  ctx: CanvasRenderingContext2D,
+  brickCount: number,
+  score: number,
+  nextRowIn: number,
+) {
+  drawLcdBacklight(ctx, LCD_W, LCD_H);
+  ctx.fillStyle = "rgba(43, 31, 11, 0.43)";
+  ctx.fillRect(50, 116, 860, 2);
+  ctx.fillRect(50, 203, 860, 2);
+
+  ctx.fillStyle = lcdInk;
+  ctx.font = "bold 43px monospace";
+  ctx.fillText("BRICKS", 64, 90);
+  ctx.fillText("SCORE", 64, 177);
+  ctx.fillText("NEXT ROW", 64, 264);
+  ctx.fillText("s", 862, 264);
+  drawLcdDigits(ctx, brickCount, 40, 2, 66);
+  drawLcdDigits(ctx, score, 127, 6, 66);
+  drawLcdDigits(ctx, nextRowIn, 214, 2, 66, 850);
+}
+
+/** The flat version, at the top of a phone. */
+function BrickBackglass({ brickCount, score, nextRowIn }: BrickBlitzReadout) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useLayoutEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(canvas.width / LCD_W, canvas.height / LCD_H);
+    paintBrickLcd(ctx, brickCount, score, nextRowIn);
+  }, [brickCount, score, nextRowIn]);
+  return <canvas ref={ref} width={LCD_W} height={LCD_H} className="block h-full w-full" aria-hidden="true" />;
+}
+
+function BrickBlitzLcd({ brickCount, score, nextRowIn }: BrickBlitzReadout) {
+  const { ctx, texture } = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = LCD_W;
+    canvas.height = LCD_H;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return { ctx: canvas.getContext("2d"), texture };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!ctx) return;
+    paintBrickLcd(ctx, brickCount, score, nextRowIn);
+    texture.needsUpdate = true;
+  }, [ctx, texture, brickCount, score, nextRowIn]);
+  useEffect(() => () => texture.dispose(), [texture]);
+
+  const width = BED.d + RAIL * 2 - 0.14;
+  const height = width / 3;
+  return (
+    <group position={[0.085, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+      <RoundedBox args={[width + 0.05, height + 0.045, 0.03]} radius={0.01} smoothness={3}>
+        <meshStandardMaterial color="#282520" metalness={0.55} roughness={0.35} />
+      </RoundedBox>
+      <mesh position={[0, 0, 0.0152]}>
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial map={texture} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
+function Table({ mobile = false, ...readout }: BrickBlitzReadout & { mobile?: boolean }) {
   const { w, d, y } = BED;
   const outerW = w + RAIL * 2;
   const outerD = d + RAIL * 2;
@@ -899,6 +1010,15 @@ function Table() {
 
   return (
     <group>
+      {!mobile && (
+        <group position={[-outerW / 2 - 0.08, y + RAIL_H + 0.26, 0]} rotation={[0, 0, 0.32]}>
+          <RoundedBox args={[0.16, 0.62, outerD]} radius={0.025} smoothness={3} receiveShadow>
+            <primitive object={wood} attach="material" />
+          </RoundedBox>
+          <BrickBlitzLcd {...readout} />
+        </group>
+      )}
+
       <mesh position={[0, y, 0]} receiveShadow>
         <boxGeometry args={[w, 0.04, d]} />
         <meshStandardMaterial color={FELT} roughness={CLOTH_ROUGHNESS} metalness={0} />
@@ -909,7 +1029,7 @@ function Table() {
         <meshStandardMaterial color={FELT_DARK} roughness={CLOTH_ROUGHNESS} />
       </mesh>
 
-      {[
+      {!mobile && [
         { pos: [0, y + RAIL_H / 2, (d + RAIL) / 2], size: [outerW, RAIL_H, RAIL] },
         { pos: [0, y + RAIL_H / 2, -(d + RAIL) / 2], size: [outerW, RAIL_H, RAIL] },
         { pos: [(w + RAIL) / 2, y + RAIL_H / 2, 0], size: [RAIL, RAIL_H, d] },
@@ -969,8 +1089,27 @@ interface Boom {
 
 type Status = "playing" | "won" | "lost";
 
-export function BrickBlitz({ onExit, active = true }: { onExit: () => void; active?: boolean }) {
-  const activeRef = useRef(active);
+export function BrickBlitz({ onExit, onReady, loading = false, active = true }: {
+  onExit: () => void;
+  onReady?: () => void;
+  loading?: boolean;
+  active?: boolean;
+}) {
+  // the click that opened the table is the gesture: resume the context now, so the
+  // first serve and the roll are already live when the player takes the shot
+  useEffect(() => {
+    void brickAudio.unlock().catch(() => {});
+  }, []);
+
+
+
+  // standing up stops the roll and the context, so the room goes quiet
+  useEffect(() => {
+    if (!active) brickAudio.silence();
+    return () => {
+      brickAudio.silence();
+    };
+  }, [active]);  const activeRef = useRef(active);
   activeRef.current = active;
   const [bricks, setBricks] = useState<Brick[]>(() => makeWall());
   const bricksRef = useRef(bricks);
@@ -991,7 +1130,13 @@ export function BrickBlitz({ onExit, active = true }: { onExit: () => void; acti
   const [status, setStatus] = useState<Status>("playing");
   const [booms, setBooms] = useState<Boom[]>([]);
   const [ready, setReady] = useState(false);
+
   const [nextRowIn, setNextRowIn] = useState(ROW_SECONDS);
+  /** A phone gets the bare bed and a flat readout instead of the cabinet. */
+  const [coarse] = useState(() => typeof window !== "undefined"
+    && window.matchMedia("(pointer: coarse)").matches);
+  /** Bricks taken off the wall this run; it sets the pace of the next row. */
+  const destroyed = useRef(0);
   const deadline = useRef(Date.now() + ROW_SECONDS * 1000);
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -1026,6 +1171,10 @@ export function BrickBlitz({ onExit, active = true }: { onExit: () => void; acti
         { id: brick.id, kind: brick.kind, x: rowX(brick.row), z: colZ(brick.col), until: now + 1200 },
       ]);
       setScore((s) => s + BRICK_POINTS[brick.kind]);
+      destroyed.current += 1;
+      // Crossing a step shortens the row already on its way, not just the next one.
+      const pace = rowIntervalFor(destroyed.current) * 1000;
+      if (deadline.current - Date.now() > pace) deadline.current = Date.now() + pace;
 
       const left = current.filter((b) => b.id !== id);
       commit(left);
@@ -1052,18 +1201,18 @@ export function BrickBlitz({ onExit, active = true }: { onExit: () => void; acti
   }, [commit]);
 
   useEffect(() => {
-    if (status !== "playing" || !ready) return;
-    deadline.current = Date.now() + ROW_SECONDS * 1000;
+    if (status !== "playing" || !ready || loading) return;
+    deadline.current = Date.now() + rowIntervalFor(destroyed.current) * 1000;
     const tick = setInterval(() => {
       const left = Math.max(0, deadline.current - Date.now());
       setNextRowIn(Math.ceil(left / 1000));
       if (left <= 0) {
-        deadline.current = Date.now() + ROW_SECONDS * 1000;
+        deadline.current = Date.now() + rowIntervalFor(destroyed.current) * 1000;
         spawnRow();
       }
     }, 200);
     return () => clearInterval(tick);
-  }, [status, ready, spawnRow]);
+  }, [status, ready, loading, spawnRow]);
 
   // Drop finished bursts.
   useEffect(() => {
@@ -1077,6 +1226,7 @@ export function BrickBlitz({ onExit, active = true }: { onExit: () => void; acti
 
   const restart = useCallback(() => {
     nextId = 1;
+    destroyed.current = 0;
     commit(makeWall());
     setScore(0);
     setBooms([]);
@@ -1085,20 +1235,27 @@ export function BrickBlitz({ onExit, active = true }: { onExit: () => void; acti
     setNextRowIn(ROW_SECONDS);
   }, [commit]);
 
-  const onReady = useCallback(() => setReady(true), []);
+  const tableReady = useCallback(() => setReady(true), []);
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-[#050506]">
+    <div className="relative h-dvh w-full overflow-hidden bg-[#24180f]">
+      <div className="absolute inset-0 flex flex-col">
+      {coarse && (
+        <div className="relative h-[14dvh] w-full shrink-0">
+          <BrickBackglass brickCount={bricks.length} score={score} nextRowIn={nextRowIn} />
+        </div>
+      )}
+      <div className="relative min-h-0 flex-1">
       <Canvas
         shadows="percentage"
         frameloop={active ? "always" : "never"}
         dpr={[1, 2]}
-        camera={{ position: [2.96, 4.3, 0], fov: 42, near: 0.05, far: 60 }}
+        camera={{ position: [2.96, 4.3, 0], fov: 44, near: 0.05, far: 60 }}
         gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         onCreated={({ camera }) => camera.lookAt(0, BED.y + 0.02, 0)}
       >
-        <color attach="background" args={["#050506"]} />
-        <fog attach="fog" args={["#050506", 6, 22]} />
+        <color attach="background" args={["#24180f"]} />
+        <fog attach="fog" args={["#24180f", 7, 24]} />
         <EnvSetup />
         <ambientLight intensity={0.3} />
 
@@ -1137,7 +1294,8 @@ export function BrickBlitz({ onExit, active = true }: { onExit: () => void; acti
         />
         <directionalLight position={[1.3, 2.6, 1.4]} intensity={0.85} color="#ffe9c8" castShadow />
 
-        <Table />
+        <BedCamera mobile={coarse} />
+        <Table brickCount={bricks.length} score={score} nextRowIn={nextRowIn} mobile={coarse} />
         <Midline />
 
         {bricks.map((b) => (
@@ -1151,47 +1309,40 @@ export function BrickBlitz({ onExit, active = true }: { onExit: () => void; acti
         <Physics
           bricks={bricks}
           onHit={hit}
-          onReady={onReady}
-          frozen={status !== "playing"}
+          onReady={tableReady}
+          frozen={loading || status !== "playing"}
         />
 
-        <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <planeGeometry args={[30, 30]} />
-          <meshStandardMaterial color="#060606" roughness={1} metalness={0} />
-        </mesh>
+        <ReadySignal enabled={ready} onReady={onReady} />
+        {!coarse && <BlurredBarFloor footprintScale={1.3} />}
       </Canvas>
 
-      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 sm:p-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <button
-              type="button"
-              onClick={onExit}
-              className="key-pill pointer-events-auto mb-3 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/50 px-3 py-1.5 font-display text-[10px] uppercase tracking-[0.2em] text-zinc-400 transition-colors hover:text-white focus-visible:text-white focus-visible:outline-none"
-            >
-              <span aria-hidden="true">&larr;</span> Bar
-            </button>
-          <p className="font-display text-[10px] uppercase tracking-[0.2em] text-zinc-500">Score</p>
-            <p className="font-display text-2xl tabular-nums text-zinc-100">{score}</p>
-          </div>
-          <div className="text-right">
-            <p className="font-display text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-              Bricks
-            </p>
-            <p className="font-display text-2xl tabular-nums text-zinc-100">{bricks.length}</p>
-          </div>
-          <div className="text-right">
-            <p className="font-display text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-              Next row
-            </p>
-            <p className="font-display text-2xl tabular-nums text-amber-300">{nextRowIn}s</p>
-          </div>
-        </div>
-
-        <p className="mx-auto rounded-sm bg-black/55 px-3 py-1 text-center font-display text-[9px] uppercase tracking-[0.16em] text-zinc-400">
-          mouse slides the handler · click to serve · clear the wall before it crosses the line
-        </p>
+      <div className="absolute right-3 top-3 z-10 flex gap-2">
+        <MuteButton />
+        <button
+          type="button"
+          onClick={onExit}
+          className="key-pill pointer-events-auto flex min-h-11 min-w-11 items-center justify-center rounded-full border border-[#3a4a40] bg-black/60 px-4 py-2 font-display text-[10px] uppercase tracking-[0.18em] text-[#b9c8bd] hover:border-[#c9973f]/60 hover:text-[#efe6d6]"
+        >
+          Stand up
+        </button>
       </div>
+      </div>
+      </div>
+
+      {coarse ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-[max(0.5rem,env(safe-area-inset-bottom))] flex justify-center px-4">
+          <p className="rounded-[3px] border border-[#c9973f]/25 bg-black/70 px-3 py-1.5 text-center font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-[#e8c877]">
+            drag to slide the handler · tap to serve
+          </p>
+        </div>
+      ) : (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex p-4 sm:p-6">
+          <p className="mx-auto rounded-sm bg-black/55 px-3 py-1 text-center font-display text-[9px] uppercase tracking-[0.16em] text-zinc-400">
+            mouse slides the handler · click to serve · clear the wall before it crosses the line
+          </p>
+        </div>
+      )}
 
       {status !== "playing" ? (
         <div className="absolute inset-0 flex items-center justify-center bg-black/70">
@@ -1202,7 +1353,6 @@ export function BrickBlitz({ onExit, active = true }: { onExit: () => void; acti
             <p className="font-display mt-2 text-3xl text-zinc-100">
               {status === "won" ? "You win" : "You lose"}
             </p>
-            <p className="font-display mt-1 text-sm text-amber-300">{score} points</p>
             <button
               type="button"
               onClick={restart}

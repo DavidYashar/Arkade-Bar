@@ -48,7 +48,7 @@ const empty: BlackjackState = {
   seed: '',
 };
 
-export function useBlackjack() {
+export function useBlackjack(paused = false) {
   const [state, setState] = useState<BlackjackState>(empty);
   const seed = useRef('');
   const script = useRef<DealtHand[]>([]);
@@ -177,7 +177,7 @@ export function useBlackjack() {
 
   // the clock runs while a decision is open; when it runs out the hand stands
   useEffect(() => {
-    if (state.phase !== 'deciding') return;
+    if (paused || state.phase !== 'deciding') return;
     const started = performance.now();
     const id = window.setInterval(() => {
       const left = Math.max(0, V0.secondsPerHand - (performance.now() - started) / 1000);
@@ -188,7 +188,7 @@ export function useBlackjack() {
       }
     }, 100);
     return () => window.clearInterval(id);
-  }, [state.phase, state.index, resolve]);
+  }, [paused, state.phase, state.index, resolve]);
 
   return {
     state,

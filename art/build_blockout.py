@@ -8,15 +8,11 @@ layout and the camera frames before any wood or neon is modelled for real.
 
 import math
 import pathlib
-import sys
 
 import bpy
 from mathutils import Vector
 
 HERE = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-
-import palm  # noqa: E402  (the local palm builder)
 ROOT = HERE.parent
 MODELS = ROOT / "public" / "models" / "bar"
 ART = pathlib.Path(r"C:\Users\yasha\Deepseek harness Projects\duel-dudes-art")
@@ -33,7 +29,6 @@ CLAY = (0.55, 0.55, 0.55, 1)
 NEON_PINK = (1.0, 0.10, 0.55, 1)
 NEON_AMBER = (1.0, 0.62, 0.20, 1)
 NEON_CYAN = (0.10, 0.85, 1.0, 1)
-GLASS = (0.10, 0.12, 0.14, 1)
 
 
 def clear():
@@ -112,7 +107,6 @@ m_concrete = material("concrete", CONCRETE, roughness=0.35)
 m_leather = material("leather", LEATHER, roughness=0.45)
 m_brass = material("brass", BRASS, roughness=0.3, metallic=1.0)
 m_clay = material("clay", CLAY, roughness=0.8)
-m_glass = material("glass", GLASS, roughness=0.15)
 m_pink = material("neon_pink", NEON_PINK, emission=2.6)
 m_amber = material("neon_amber", NEON_AMBER, emission=2.2)
 m_cyan = material("neon_cyan", NEON_CYAN, emission=2.6)
@@ -147,28 +141,7 @@ def build_room():
     # all from the same numbers, so they cannot disagree.
 
 
-def build_bar():
-    # counter across the back, a little in front of the wall
-    box("bar_body", (7.2, 0.62, 1.05), (0, BACK - 1.35, 0.525), m_walnut)
-    box("bar_top", (7.4, 0.78, 0.07), (0, BACK - 1.35, 1.09), m_leather)
-    box("bar_underlight", (7.2, 0.05, 0.04), (0, BACK - 1.02, 0.10), m_warm)
-
-    # back bar: shelves and bottles
-    box("backbar", (7.0, 0.35, 2.6), (0, BACK - 0.28, 1.3), m_walnut)
-    for shelf in range(3):
-        z = 1.15 + shelf * 0.55
-        box(f"shelf_{shelf}", (6.6, 0.30, 0.04), (0, BACK - 0.30, z), m_walnut)
-        for i in range(22):
-            x = -3.1 + i * 0.29
-            cyl(f"bottle_{shelf}_{i}", 0.035, 0.24 if i % 3 else 0.30,
-                (x, BACK - 0.30, z + 0.15), m_glass, verts=8)
-
-    # six stools
-    for i in range(6):
-        x = -2.5 + i * 1.0
-        cyl(f"stool_leg_{i}", 0.04, 0.65, (x, BACK - 2.05, 0.325), m_ink, verts=8)
-        cyl(f"stool_seat_{i}", 0.19, 0.07, (x, BACK - 2.05, 0.69), m_leather, verts=16)
-
+def build_rings():
     # brass ring light above the room centre
     torus("ring_a", 2.2, 0.035, (0, 0.5, H - 0.75), m_warm)
     torus("ring_b", 1.5, 0.03, (0, -3.2, H - 0.95), m_warm)
@@ -193,9 +166,8 @@ def build_cabinet(name, loc, rot_z, screen_mat):
 
 
 def build_cabinets():
-    # Two on the right wall; the left wall now carries the pinball cabinet alone.
-    for i, y in enumerate((-2.4, -0.6)):
-        build_cabinet(f"cab_r{i + 1}", (W / 2 - 1.1, y), math.radians(-75), m_screen)
+    # No arcade cabinets for now: the room's furniture comes from its own scripts.
+    return
 
 
 def build_tables():
@@ -208,14 +180,6 @@ def build_tables():
         box(f"card_chair_seat_{i}", (0.46, 0.46, 0.07), (x, y, 0.46), m_leather)
         box(f"card_chair_back_{i}", (0.46, 0.06, 0.48), (x, y + (0.22 if dy > 0 else -0.22), 0.70), m_leather)
 
-    # a few game tables down the middle
-    for i, (x, y) in enumerate(((-3.4, -5.6), (3.4, -5.6), (-3.2, 2.6), (3.2, 2.6))):
-        box(f"game_table_{i}", (1.5, 0.95, 0.07), (x, y, 0.74), m_walnut)
-        for side in (-1, 1):
-            box(f"game_chair_{i}_{side}", (0.44, 0.44, 0.06), (x, y + side * 0.72, 0.45), m_leather)
-            box(f"game_chair_back_{i}_{side}", (0.44, 0.05, 0.45), (x, y + side * 0.94, 0.68), m_leather)
-
-
 def build_lounge():
     # chesterfield corner at the front left, with a rug
     plane("rug", (3.4, 2.4), (-4.3, -6.0, 0.01), material("rug", (0.30, 0.12, 0.08, 1)))
@@ -224,39 +188,6 @@ def build_lounge():
     for side in (-1, 1):
         box(f"sofa_arm_{side}", (0.18, 0.85, 0.55), (-4.3 + side * 1.05, -6.7, 0.42), m_leather)
     box("coffee_table", (1.3, 0.7, 0.35), (-4.3, -4.9, 0.17), m_walnut)
-
-    # plants at the corners
-    # the same palms as the entrance, one species for the whole bar
-    for i, (x, y, seed) in enumerate(((-6.2, -7.6, 7), (6.2, -7.6, 11), (-6.2, 2.0, 13), (6.2, 2.0, 17))):
-        palm.build_palm(f"plant_{i}", (x, y, 0.0), height=1.42, reach=0.86, fronds=16, seed=seed)
-
-
-def sign_ghost():
-    # pixel ghost, eleven wide, blocks of 0.09
-    pattern = [
-        "00111111100",
-        "01111111110",
-        "11111111111",
-        "11100100111",
-        "11100100111",
-        "11111111111",
-        "11111111111",
-        "11011011011",
-    ]
-    y0, z0 = 0.4, 3.05
-    for r, row in enumerate(pattern):
-        for c, ch in enumerate(row):
-            if ch == "1":
-                box(f"ghost_{r}_{c}", (0.04, 0.10, 0.10),
-                    (-W / 2 + 0.18, y0 + c * 0.11, z0 - r * 0.11), m_pink)
-
-
-def sign_gamepad():
-    y0, z0 = 0.8, 3.0
-    box("pad_body", (0.04, 0.9, 0.36), (W / 2 - 0.18, y0, z0), m_amber)
-    for side in (-1, 1):
-        box(f"pad_grip_{side}", (0.04, 0.28, 0.34), (W / 2 - 0.18, y0 + side * 0.5, z0 - 0.1), m_amber)
-
 
 def sign_crown():
     # over the card table: the mark from the card backs
@@ -279,17 +210,10 @@ def build_exterior():
     box("facade_l", (W / 2 - 2.2, 0.3, 3.6), (-W / 4 - 1.1, FRONT - 0.25, 1.8), m_ink)
     box("facade_r", (W / 2 - 2.2, 0.3, 3.6), (W / 4 + 1.1, FRONT - 0.25, 1.8), m_ink)
     box("facade_top", (4.4, 0.3, 0.5), (0, FRONT - 0.25, 3.4), m_ink)
-    for i in range(24):
-        x = -5.4 + i * 0.47
-        if abs(x) < 2.5:
-            continue
-        box(f"f_slat_{i}", (0.10, 0.10, 3.2), (x, FRONT - 0.45, 1.6), m_walnut)
     # the sign above the door is a neon built in the browser, not geometry here
     # outside: sidewalk and street edge
     plane("sidewalk", (W + 10.0, 6.0), (0, FRONT - 3.0, -0.01), m_concrete)
     box("kerb", (W + 10.0, 0.25, 0.12), (0, FRONT - 6.0, 0.06), m_ink)
-    palm.build_palm("palm_left", (-3.2, FRONT - 1.0, 0.0), seed=1)
-    palm.build_palm("palm_right", (3.2, FRONT - 1.0, 0.0), seed=4)
 
 
 def build_lights():
@@ -360,12 +284,10 @@ def render(cameras):
 
 def main():
     build_room()
-    build_bar()
+    build_rings()
     build_cabinets()
     build_tables()
     build_lounge()
-    sign_ghost()
-    sign_gamepad()
     sign_crown()
     sign_beer()
     build_exterior()

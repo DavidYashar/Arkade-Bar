@@ -12,15 +12,20 @@
 /** A minor pentatonic, so any order the bells are hit in stays musical. */
 const BELL_SCALE = [220.0, 261.63, 293.66, 329.63, 392.0];
 
+import { isGameMuted, onGameMute } from '@/lib/gameSound';
+
 export class PinballAudio {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private muted = isGameMuted();
   private rollGain: GainNode | null = null;
   private rollFilter: BiquadFilterNode | null = null;
   private rollSource: AudioBufferSourceNode | null = null;
   private rollLevel = 0;
   private lastImpactAt = 0;
   private ambient: HTMLAudioElement | null = null;
+  private launchBuffer: AudioBuffer | null = null;
+  private launchLoading = false;
   private ambientLevel = 0.32;
 
   /** Diagnostic: how the arcade bed is doing. */
@@ -67,6 +72,7 @@ export class PinballAudio {
     }
 
     if (this.ctx.state === "suspended") await this.ctx.resume();
+    void this.loadLaunch();
     this.startAmbience();
   }
 
@@ -76,7 +82,11 @@ export class PinballAudio {
    */
   startAmbience(url = "/audio/pinball-ambience.mp3"): void {
     if (this.ambient) {
-      void this.ambient.play().catch(() => {});
+      // coming back to the table: restart the bed and fade it up again
+      void this.ambient
+        .play()
+        .then(() => this.fadeAmbience(this.muted ? 0 : this.ambientLevel, 800))
+        .catch(() => {});
       return;
     }
     const el = new Audio(url);
@@ -96,9 +106,18 @@ export class PinballAudio {
   private fadeAmbience(to: number, ms: number): void {
     const el = this.ambient;
     if (!el) return;
+    if (this.muted) {
+      el.volume = 0;
+      return;
+    }
     const from = el.volume;
     const started = performance.now();
     const step = () => {
+      // A fade already in flight must not undo the switch.
+      if (this.muted) {
+        el.volume = 0;
+        return;
+      }
       const t = Math.min(1, (performance.now() - started) / ms);
       el.volume = Math.max(0, Math.min(1, from + (to - from) * t));
       if (t < 1) requestAnimationFrame(step);
@@ -109,7 +128,7 @@ export class PinballAudio {
   /** 0 mutes the bed, 1 is full. */
   setAmbience(level: number): void {
     this.ambientLevel = Math.max(0, Math.min(1, level));
-    if (this.ambient) this.ambient.volume = this.ambientLevel;
+    if (this.ambient) this.ambient.volume = this.muted ? 0 : this.ambientLevel;
   }
 
   private noiseBuffer(seconds = 2): AudioBuffer {
@@ -125,6 +144,48 @@ export class PinballAudio {
       data[i] = last * 3.5;
     }
     return buffer;
+  }
+
+  /**
+   * Stops everything the table is making: the arcade bed, the rolling bed and any
+   * note still ringing. Called when the player stands up, and on unmount.
+   */
+  silence(): void {
+    if (this.ambient) {
+      this.ambient.pause();
+      this.ambient.currentTime = 0;
+      this.ambient.volume = 0;
+    }
+    if (this.rollGain) this.rollGain.gain.value = 0;
+    if (this.rollSource) {
+      try {
+        this.rollSource.stop();
+      } catch {
+        // already stopped
+      }
+      this.rollSource.disconnect();
+      this.rollSource = null;
+      this.rollFilter = null;
+      this.rollGain = null;
+    }
+    if (this.ctx && this.ctx.state === "running") void this.ctx.suspend();
+  }
+
+  /** The speaker by Stand up: the whole table, not one bumper. */
+  setMuted(next: boolean) {
+    this.muted = next;
+    const master = this.master;
+    if (master) master.gain.setTargetAtTime(next ? 0 : 0.85, master.context.currentTime, .04);
+    // The arcade bed is an <audio> element, outside the graph, so it needs the switch too.
+    if (this.ambient) this.ambient.volume = next ? 0 : this.ambientLevel;
+  }
+
+  dispose(): void {
+    this.silence();
+    void this.ctx?.close();
+    this.ctx = null;
+    this.master = null;
+    this.ambient = null;
   }
 
   /** A permanent low channel for the ball rolling on the slate. */
@@ -253,6 +314,43 @@ export class PinballAudio {
     this.tone(at, 120, 0.09, 0.22, "sine", 70);
   }
 
+  /** Decode the launch sample once, so the first pull is not silent. */
+  private async loadLaunch(): Promise<void> {
+    if (this.launchBuffer || this.launchLoading || !this.ctx) return;
+    this.launchLoading = true;
+    try {
+      const response = await fetch("/audio/pinball-launch.mp3");
+      const bytes = await response.arrayBuffer();
+      this.launchBuffer = await this.ctx.decodeAudioData(bytes);
+    } catch {
+      // no sample is not a failure: the synth plunge still fires
+    } finally {
+      this.launchLoading = false;
+    }
+  }
+
+  /** The shot heard when the spring releases: the drain sample, first two seconds. */
+  launch(power: number): void {
+    if (!this.ctx || !this.master) return;
+    if (!this.launchBuffer) {
+      void this.loadLaunch();
+      return;
+    }
+    const level = 0.45 + 0.4 * Math.max(0, Math.min(1, power));
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.launchBuffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = level;
+    source.connect(gain);
+    gain.connect(this.master);
+    // the sample runs 3 s, the shot only needs the first 2
+    source.start(this.ctx.currentTime, 0, 2);
+    source.onended = () => {
+      source.disconnect();
+      gain.disconnect();
+    };
+  }
+
   /** Plunger: the spring compressing, then the launch. */
   plunge(charge: number): void {
     if (!this.ctx) return;
@@ -281,3 +379,4 @@ export class PinballAudio {
 }
 
 export const audio = new PinballAudio();
+onGameMute((mutedNow) => audio.setMuted(mutedNow));

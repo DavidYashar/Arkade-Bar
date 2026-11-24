@@ -107,6 +107,24 @@ export function unlockSfx(): void {
   for (const name of Object.keys(SAMPLES)) void load(name);
 }
 
+/**
+ * Everything a click needs before it can sound: the context running and every
+ * sample decoded. Await it before an animation that has a sound on its first frame,
+ * or the picture starts before the audio can.
+ */
+export async function prepareSfx(): Promise<void> {
+  const ctx = ensureContext();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') {
+    try {
+      await ctx.resume();
+    } catch {
+      // no gesture yet; the caller's click will provide one
+    }
+  }
+  await Promise.all(Object.keys(SAMPLES).map((name) => load(name)));
+}
+
 export function play(name: 'deal' | 'place' | 'tap', gain = 1): void {
   if (isMuted()) return;
   const ctx = ensureContext();

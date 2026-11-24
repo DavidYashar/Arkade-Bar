@@ -1,14 +1,24 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useGLTF, useTexture } from '@react-three/drei';
+import { Clone, useGLTF, useTexture } from '@react-three/drei';
 import type { Object3D } from 'three';
-import { BackSide, CanvasTexture, LinearFilter, MeshBasicMaterial, MeshStandardMaterial, PointLight, RepeatWrapping, SRGBColorSpace, Vector3 } from 'three';
+import { BackSide, BufferAttribute, CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, PointLight, PropertyBinding, SpotLight, SRGBColorSpace, Vector3 } from 'three';
 import type { View } from './views';
+import { ReadySignal } from './ReadySignal';
 import { VIEWS } from './views';
-import { blocked, insideBounds, DOOR_AT } from './colliders';
+import { blocked, insideBounds, BRICK_BLITZ_AT, CHESTERFIELD_AT, DOOR_AT, ENTRANCE_COUCH_AT, ENTRANCE_PLANTERS, ENTRANCE_TABLE_AT, INTERIOR_PLANTERS, JUKEBOX_AT, NARROWS_AT, NARROWS_REACH, NARROWS_SCALE, NARROWS_YAW, PINBALL_AT } from './colliders';
+import { BrickBlitzNeon, DartsNeon, JukeboxNeon, PinballNeon, RescueBoatNeon } from './ArcadeNeon';
+import { BlackjackHangingSign } from './BlackjackHangingSign';
+import { RearBarShelfStock } from './RearBarShelfStock';
+import { CounterNotice } from './CounterNotice';
 import { BlackjackCards, BlackjackTable } from '@/games/blackjack/Blackjack3D';
 import { TableResult } from '@/games/blackjack/TableResult';
 import type { BlackjackState } from '@/games/blackjack/useBlackjack';
+import { DartsBoard, DARTS } from '@/games/darts/DartsBoard';
+import type { DartsState } from '@/games/darts/useDarts';
+import type { Shot } from '@/games/darts/board';
+import { NarrowsCabinet } from '@/games/narrows/NarrowsCabinet';
+import { Jukebox, type JukeboxControls } from '@/games/jukebox/Jukebox';
 
 const EYE = 1.68;
 const SPEED = 3.1;
@@ -23,6 +33,8 @@ function Player({
   move,
   onDoor,
   seat,
+  dartsCam,
+  jukeboxView,
   onPosition,
 }: {
   view: View;
@@ -30,13 +42,20 @@ function Player({
   move: React.RefObject<{ x: number; z: number }>;
   onDoor: (open: boolean) => void;
   seat: boolean;
+  dartsCam: boolean;
+  jukeboxView: boolean;
   onPosition: (x: number, z: number) => void;
+  onReady?: () => void;
+  /** The seated table, with its cards, is on screen and the deal may start. */
+  onTableReady?: () => void;
 }) {
   const camera = useThree((s) => s.camera);
   const pos = useRef(new Vector3(view.position[0], EYE, view.position[2]));
   const doorOpen = useRef(false);
   const keys = useRef(new Set<string>());
   const frame = useRef(0);
+  const [coarse] = useState(() => typeof window !== 'undefined'
+    && window.matchMedia('(pointer: coarse)').matches);
 
   useEffect(() => {
     // A frame can point at a spot that a sofa or a table already occupies. Stand at
@@ -55,6 +74,8 @@ function Player({
     };
     const [x, z] = stand(view.position[0], view.position[2]);
     pos.current.set(x, EYE, z);
+    // same idea as dataset.pos: a hook for the movement tests, not for the UI
+    document.body.dataset.view = view.id;
   }, [view]);
 
   useEffect(() => {
@@ -69,6 +90,39 @@ function Player({
   }, []);
 
   useFrame((_, delta) => {
+    const lens = camera as unknown as { fov: number; updateProjectionMatrix: () => void };
+    if (jukeboxView) {
+      camera.position.set(JUKEBOX_AT[0] - 2.71, 1.48, JUKEBOX_AT[1]);
+      camera.lookAt(JUKEBOX_AT[0] - .45, 1.68, JUKEBOX_AT[1]);
+      if (lens.fov !== 88) {
+        lens.fov = 88;
+        lens.updateProjectionMatrix();
+      }
+      return;
+    }
+    if (dartsCam) {
+      camera.position.set(DARTS.oche[0], DARTS.oche[1], DARTS.oche[2]);
+      if (coarse) {
+        // Square on to the board, so it sits in the middle of a tall screen.
+        camera.lookAt(DARTS.wallX, DARTS.boardY, DARTS.boardZ);
+        // A little wider than the board, so it keeps a margin at both edges.
+        if (lens.fov !== 44) {
+          lens.fov = 44;
+          lens.updateProjectionMatrix();
+        }
+        return;
+      }
+      camera.rotation.set(0.046, -Math.PI / 2, 0, 'YXZ');
+      if (lens.fov !== 42) {
+        lens.fov = 42;
+        lens.updateProjectionMatrix();
+      }
+      return;
+    }
+    if (lens.fov !== 90) {
+      lens.fov = 90;
+      lens.updateProjectionMatrix();
+    }
     if (seat) {
       camera.position.set(0, 2.15, 2.0);
       camera.rotation.set(-Math.PI / 2, 0, 0, 'YXZ');
@@ -225,6 +279,16 @@ function Leaf({ side }: { side: -1 | 1 }) {
   );
 }
 
+const REPLACED_BLOCKOUT_SURFACES = new Set([
+  'wall_left', 'wall_right', 'wall_back', 'card_table', 'card_felt', 'floor', 'sidewalk',
+  'ceiling', 'duct_-3.2', 'duct_3.2', 'ring_a', 'ring_b',
+  'cove_left', 'cove_right', 'cove_back',
+  'pad_body', 'pad_grip_-1', 'pad_grip_1',
+  'facade_l', 'facade_r', 'facade_top',
+  'bar_body', 'bar_top', 'bar_underlight', 'backbar',
+  'rug', 'sofa_seat', 'sofa_back', 'sofa_arm_-1', 'sofa_arm_1', 'coffee_table',
+].map((name) => PropertyBinding.sanitizeNodeName(name)));
+
 function Blockout() {
   const gltf = useGLTF('/models/bar/blockout.glb');
   const scene = gltf.scene as Object3D;
@@ -248,14 +312,18 @@ function Blockout() {
     (window as unknown as { __scene?: Object3D }).__scene = scene;
   }, [objects, triangles, scene]);
 
-  // The model's own walls step aside; the interior walls are drawn as planes
-  // with UVs we control, so the planks always run upright.
+  // Hide replaced or retired objects in the original room export.
   useEffect(() => {
     scene.traverse((node) => {
       const mesh = node as Object3D & { isMesh?: boolean };
       if (!mesh.isMesh) return;
-      const hide = ['wall_left', 'wall_right', 'wall_back', 'card_table', 'card_felt', 'floor'];
-      if (hide.includes(mesh.name) || mesh.name.startsWith('card_chair')) {
+      if (REPLACED_BLOCKOUT_SURFACES.has(mesh.name) ||
+          mesh.name.startsWith('card_chair') || mesh.name.startsWith('ghost_') ||
+          mesh.name.startsWith('game_table_') || mesh.name.startsWith('game_chair_') ||
+          mesh.name.startsWith('palm_left_') || mesh.name.startsWith('palm_right_') ||
+          mesh.name.startsWith('plant_') || mesh.name.startsWith('f_slat_') ||
+          mesh.name.startsWith('shelf_') || mesh.name.startsWith('bottle_') ||
+          mesh.name.startsWith('stool_')) {
         mesh.visible = false;
       }
     });
@@ -344,7 +412,7 @@ function NeonSign() {
   if (!texture) return null;
 
   return (
-    <group position={[0, 3.12, 9.62]}>
+    <group position={[0, 3.71, 9.62]}>
       <mesh>
         <planeGeometry args={[4.4, 1.1]} />
         <meshBasicMaterial
@@ -371,8 +439,10 @@ function SkyStars() {
   const camera = useThree((s) => s.camera);
 
   useEffect(() => {
+    if (!texture) return;
     texture.colorSpace = SRGBColorSpace;
     texture.anisotropy = 4;
+    texture.needsUpdate = true;
   }, [texture]);
 
   useFrame((_, delta) => {
@@ -398,36 +468,65 @@ function SkyStars() {
 }
 
 function WoodWalls() {
-  const wood = useTexture('/textures/wood-wall.png');
+  const { scene } = useGLTF('/models/bar/arkade-wood-walls.glb');
+  return <primitive object={scene} />;
+}
 
-  const walls: { pos: [number, number, number]; rotY: number; w: number; h: number }[] = [
-    { pos: [-6.86, 2.1, 0], rotY: Math.PI / 2, w: 18, h: 4.2 },
-    { pos: [6.86, 2.1, 0], rotY: -Math.PI / 2, w: 18, h: 4.2 },
-    { pos: [0, 2.1, -8.86], rotY: 0, w: 14, h: 4.2 },
-  ];
+function BarCeiling({ blackjackShadows }: { blackjackShadows: boolean }) {
+  const { scene } = useGLTF('/models/bar/arkade-ceiling.glb');
+  useLayoutEffect(() => {
+    // The first downward ring spot sits to the side of the felt and casts a readable card shadow.
+    const spot = scene.getObjectByName(PropertyBinding.sanitizeNodeName('Ring diffuser light'));
+    if (!(spot instanceof SpotLight) || !blackjackShadows) return;
+    spot.castShadow = true;
+    spot.shadow.mapSize.set(1024, 1024);
+    spot.shadow.focus = 0.77;
+    spot.shadow.bias = -0.00015;
+    spot.shadow.normalBias = 0.001;
+    return () => {
+      spot.castShadow = false;
+    };
+  }, [scene, blackjackShadows]);
+  return <primitive object={scene} />;
+}
 
+function RearBar() {
+  const { scene } = useGLTF('/models/bar/arkade-rear-bar.glb');
+  return (
+    <>
+      <primitive object={scene} />
+      <RearBarShelfStock />
+      <CounterNotice />
+    </>
+  );
+}
+
+
+
+/**
+ * The outside of the two side walls.
+ *
+ * The room's inner walls are single-sided planes at x = +/-6.86, so from the street
+ * you could see straight through them. These are the building's real sides: a brick
+ * skin modelled brick by brick, each one sampling its own face from a photo atlas.
+ */
+function SideWalls() {
+  const { scene } = useGLTF('/models/bar/arkade-side-brick.glb');
   return (
     <group>
-      {walls.map((wall, index) => {
-        const tex = wood.clone();
-        tex.wrapS = RepeatWrapping;
-        tex.wrapT = RepeatWrapping;
-        tex.colorSpace = SRGBColorSpace;
-        tex.anisotropy = 8;
-        tex.needsUpdate = true;
-        // the sample holds four planks across; planks are ~0.2 m wide, 1.8 m long
-        tex.repeat.set((wall.w / 0.85) / 4 * 4, wall.h / 1.8);
-        return (
-          <mesh key={index} position={wall.pos} rotation={[0, wall.rotY, 0]}>
-            <planeGeometry args={[wall.w, wall.h]} />
-            <meshStandardMaterial map={tex} color={0x8f8170} roughness={0.74} metalness={0.02} />
-          </mesh>
-        );
-      })}
+      <primitive object={scene} />
+      {/* wall washers, so the brick reads at night instead of going black */}
+      {[-1, 1].map((side) => (
+        <group key={side}>
+          <pointLight position={[side * 8.7, 3.6, 4.2]} intensity={16} distance={16} color="#ffcf9a" />
+          <pointLight position={[side * 8.7, 3.6, -3.4]} intensity={16} distance={16} color="#ffcf9a" />
+        </group>
+      ))}
     </group>
   );
 }
 
+useGLTF.preload('/models/bar/arkade-side-brick.glb');
 
 /** Projects the two card rows so their labels can sit just outside them. */
 function LabelAnchors() {
@@ -444,70 +543,138 @@ function LabelAnchors() {
 
 
 /** The pinball machine on the left wall: the cabinet you actually play. */
-export const PINBALL_AT: [number, number] = [-6.05, 2.2];
-
 function PinballCabinet() {
   const gltf = useGLTF('/models/bar/pinball-cabinet.glb');
-  return (
-    <group>
-      <primitive object={gltf.scene} position={[PINBALL_AT[0], 0, PINBALL_AT[1]]} />
-      {/* its own light, so the machine reads in that dark corner */}
-      <pointLight position={[-5.2, 2.2, 2.9]} intensity={9} distance={4.5} color="#ffd9a8" />
-      <pointLight position={[-6.4, 1.5, 2.2]} intensity={4} distance={2.4} color="#ff8a3d" />
-    </group>
-  );
+  return <primitive object={gltf.scene} position={[PINBALL_AT[0], 0, PINBALL_AT[1]]} />;
 }
 
 useGLTF.preload('/models/bar/pinball-cabinet.glb');
 
-/** The room's walnut floor, one tile every 1.2 m: planks about 20 cm wide. */
-function useFloorTexture(size: [number, number]) {
-  const source = useTexture('/textures/floor-walnut.webp');
-  return useMemo(() => {
-    const texture = source.clone();
-    texture.wrapS = RepeatWrapping;
-    texture.wrapT = RepeatWrapping;
-    texture.repeat.set(size[0] / 1.2, size[1] / 1.2);
-    texture.colorSpace = SRGBColorSpace;
-    texture.anisotropy = 8;
-    texture.needsUpdate = true;
-    return texture;
-  }, [source, size]);
+function BrickBlitzCabinet() {
+  const { scene } = useGLTF('/models/bar/brick-blitz-table.glb');
+  return (
+    <group position={[BRICK_BLITZ_AT[0], 0, BRICK_BLITZ_AT[1]]} rotation={[0, Math.PI, 0]}>
+      <primitive object={scene} />
+    </group>
+  );
 }
 
-function FloorPlane({ size }: { size: number }) {
-  const map = useFloorTexture(useMemo<[number, number]>(() => [size, size], [size]));
+function Chesterfield({ at, yaw, lift = 0 }: {
+  at: readonly [number, number]; yaw: number; lift?: number;
+}) {
+  const { scene } = useGLTF('/models/bar/chesterfield.glb');
+  return <Clone object={scene} position={[at[0], lift, at[1]]} rotation={[0, yaw, 0]} />;
+}
+
+function EntranceLounge() {
+  const { scene } = useGLTF('/models/bar/entrance-lounge.glb');
+  const shadows = useTexture('/textures/arkade-floor-shadows.png');
+  const rugShadow = useMemo(() => {
+    const rug = scene.getObjectByName(PropertyBinding.sanitizeNodeName('Entrance lounge | Woven wool'));
+    if (!(rug instanceof Mesh)) return null;
+    // Reuse the rug's outline so the floor bake continues onto its raised surface.
+    const geometry = rug.geometry.clone();
+    geometry.applyMatrix4(rug.matrix);
+    const vertices = geometry.getAttribute('position');
+    const uv = new Float32Array(vertices.count * 2);
+    for (let i = 0; i < vertices.count; i++) {
+      uv[2 * i] = (vertices.getX(i) + ENTRANCE_TABLE_AT[0] + 7) / 14;
+      uv[2 * i + 1] = (9 - vertices.getZ(i) - ENTRANCE_TABLE_AT[1]) / 18;
+    }
+    geometry.setAttribute('uv', new BufferAttribute(uv, 2));
+    return geometry;
+  }, [scene]);
+  useEffect(() => () => rugShadow?.dispose(), [rugShadow]);
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.002, 2.0]}>
-      <planeGeometry args={[size, size]} />
-      <meshStandardMaterial map={map} roughness={0.5} metalness={0.04} color="#ffffff" />
-    </mesh>
+    <>
+      <Chesterfield at={ENTRANCE_COUCH_AT} yaw={Math.PI} lift={.012} />
+      <primitive object={scene} position={[ENTRANCE_TABLE_AT[0], 0, ENTRANCE_TABLE_AT[1]]} />
+      {rugShadow && (
+        <mesh geometry={rugShadow} position={[ENTRANCE_TABLE_AT[0], .0005, ENTRANCE_TABLE_AT[1]]}>
+          <meshBasicMaterial map={shadows} transparent depthWrite={false} toneMapped={false} />
+        </mesh>
+      )}
+    </>
   );
 }
 
 function BarFloor() {
-  const size = useMemo<[number, number]>(() => [14, 18], []);
-  const map = useFloorTexture(size);
+  const { scene } = useGLTF('/models/bar/arkade-walnut-floor.glb');
+  const shadows = useTexture('/textures/arkade-floor-shadows.png');
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]}>
-      <planeGeometry args={[size[0], size[1]]} />
-      <meshStandardMaterial map={map} roughness={0.5} metalness={0.04} color="#ffffff" />
-    </mesh>
+    <>
+      <primitive object={scene} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, .002, 0]}>
+        <planeGeometry args={[14, 18]} />
+        <meshBasicMaterial map={shadows} transparent depthWrite={false} toneMapped={false} />
+      </mesh>
+    </>
   );
 }
 
-/** The bar's own floor, the only part of the room the game needs. */
-function GameFloor() {
-  return (
-    <group>
-      <FloorPlane size={26} />
-      <pointLight position={[0, 3.1, 2.0]} intensity={18} distance={9} color="#ffcf9a" />
-      <pointLight position={[0, 2.4, 1.1]} intensity={4} distance={6} color="#ffbf73" />
-      <pointLight position={[0, 2.4, 2.9]} intensity={4} distance={6} color="#ffbf73" />
-      <pointLight position={[-2.6, 2.0, 2.0]} intensity={3} distance={6} color="#ff3fae" />
-      <pointLight position={[2.6, 2.0, 2.0]} intensity={3} distance={6} color="#35d8ff" />
-    </group>
-  );
+function EntrancePaving() {
+  const { scene } = useGLTF('/models/bar/arkade-entrance-paving.glb');
+  return <primitive object={scene} />;
+}
+
+function EntranceFacade() {
+  const { scene } = useGLTF('/models/bar/arkade-entrance-facade.glb');
+  return <primitive object={scene} />;
+}
+
+function EntrancePlanters() {
+  const { scene } = useGLTF('/models/bar/arkade-entrance-planter.glb');
+  return ENTRANCE_PLANTERS.map(([x, z], index) => (
+    <Clone key={x} object={scene} position={[x, 0, z]} rotation={[0, index ? 0.72 : -0.28, 0]} />
+  ));
+}
+
+function InteriorPlanters() {
+  const { scene } = useGLTF('/models/bar/arkade-interior-planter.glb');
+  return INTERIOR_PLANTERS.map(([x, z], index) => (
+    <Clone key={index} object={scene} position={[x, 0, z]} rotation={[0, 0.35 + index * 1.31, 0]} />
+  ));
+}
+
+// Six square views cover the room around the player, independent of window aspect.
+const WARM_ROOM_ANGLES = [
+  [0, 0], [0, Math.PI / 2], [0, Math.PI], [0, -Math.PI / 2],
+  [Math.PI / 2, 0], [-Math.PI / 2, 0],
+] as const;
+
+function WarmRoom({ onReady }: { onReady: () => void }) {
+  const camera = useMemo(() => new PerspectiveCamera(90, 1, .05, 400), []);
+  const frame = useRef(0);
+
+  // Render one view per frame with the same renderer the player will use.
+  // Positive priority runs after Player and replaces Fiber's default draw.
+  useFrame(({ gl, scene, camera: playerCamera }) => {
+    const step = frame.current++;
+    const angle = WARM_ROOM_ANGLES[step - 1];
+    if (angle) {
+      const [pitch, yaw] = angle;
+      camera.position.copy(playerCamera.position);
+      camera.rotation.set(pitch, yaw, 0, 'YXZ');
+      gl.render(scene, camera);
+      return;
+    }
+    gl.render(scene, playerCamera);
+    // Draw the settled return view before the loader can start fading.
+    if (step === WARM_ROOM_ANGLES.length + 1) onReady();
+  }, 1);
+
+  return null;
+}
+
+type JukeboxListenerUpdate = (x: number, y: number, z: number, fx: number, fy: number, fz: number, doorOpen: boolean) => void;
+
+function JukeboxListener({ update, doorOpen }: { update: JukeboxListenerUpdate; doorOpen: boolean }) {
+  const forward = useMemo(() => new Vector3(), []);
+  useFrame(({ camera }) => {
+    camera.getWorldDirection(forward);
+    update(camera.position.x, camera.position.y, camera.position.z, forward.x, forward.y, forward.z, doorOpen);
+  });
+  return null;
 }
 
 function DebugScene() {
@@ -527,39 +694,60 @@ export function BarScene({
   move,
   seat,
   blackjack,
+  darts,
+  dartsOn,
+  paused,
+  onDartThrow,
+  onNarrowsPlay,
   onPosition,
+  onReady,
+  onTableReady,
+  onSeatedVisible,
+  seatedVisibleKey,
+  loadingId,
+  warmRoom,
+  jukebox,
 }: {
   view: View;
   look: Look;
   move: React.RefObject<{ x: number; z: number }>;
   seat: boolean;
   blackjack: BlackjackState;
+  darts: DartsState;
+  dartsOn: boolean;
+  paused?: boolean;
+  onDartThrow: (shot: Shot) => void;
+  onNarrowsPlay: () => void;
   onPosition: (x: number, z: number) => void;
+  onReady?: () => void;
+  /** The seated table and its cards are on screen. */
+  onTableReady?: () => void;
+  /** Fires a few drawn frames after the loading screen has gone, so the table is seen. */
+  onSeatedVisible?: () => void;
+  seatedVisibleKey?: number;
+  loadingId?: number;
+  warmRoom?: boolean;
+  jukebox: JukeboxControls & { updateListener: JukeboxListenerUpdate };
 }) {
   const [doorOpen, setDoorOpen] = useState(false);
+  /** Phones stand at the oche looking straight at the board. */
+  const [coarse] = useState(() => typeof window !== 'undefined'
+    && window.matchMedia('(pointer: coarse)').matches);
 
   useEffect(() => {
     document.body.dataset.door = doorOpen ? 'open' : 'closed';
   }, [doorOpen]);
 
   return (
-    <Canvas dpr={[1, 2]} gl={{ antialias: true }} camera={{ position: VIEWS[0]!.position, fov: 90, near: 0.05, far: 400 }}>
+    <Canvas shadows="percentage" dpr={[1, 2]} gl={{ antialias: true }} frameloop={paused ? 'never' : 'always'} camera={{ position: VIEWS[0]!.position, fov: 90, near: 0.05, far: 400 }}>
       <color attach="background" args={['#070d0a']} />
       <fog attach="fog" args={['#070d0a', 20, 55]} />
-      <ambientLight intensity={0.55} color="#ffd9a8" />
-      <hemisphereLight args={['#ffcf9a', '#0a1a12', 0.5]} />
-      {!seat && (
-        <>
-          <pointLight position={[0, 3.6, 6.5]} intensity={22} distance={16} color="#ffbf73" />
-          <pointLight position={[0, 3.6, -3.0]} intensity={16} distance={14} color="#ffbf73" />
-          <pointLight position={[-5.6, 2.6, -0.6]} intensity={10} distance={10} color="#ff3fae" />
-          <pointLight position={[5.6, 2.6, -1.4]} intensity={10} distance={10} color="#35d8ff" />
-          <pointLight position={[0, 4.2, 13.5]} intensity={18} distance={14} color="#ffbf73" />
-          {/* symmetric pair: the entrance must read the same on both sides */}
-          <pointLight position={[-3.4, 2.6, 6.6]} intensity={10} distance={11} color="#ffbf73" />
-          <pointLight position={[3.4, 2.6, 6.6]} intensity={10} distance={11} color="#ffbf73" />
-        </>
-      )}
+      {!seat && (warmRoom && onReady
+        ? <WarmRoom key={loadingId} onReady={onReady} />
+        : <ReadySignal key={loadingId} onReady={onReady} />)}
+      <ambientLight intensity={0.38} color="#ffd9a8" />
+      <hemisphereLight args={['#ffcf9a', '#0a1a12', 0.35]} />
+      <pointLight position={[0, 4.2, 13.5]} intensity={seat ? 10 : 18} distance={14} color="#ffbf73" />
       <DebugScene />
       <Player
         view={view}
@@ -567,28 +755,60 @@ export function BarScene({
         move={move}
         onDoor={setDoorOpen}
         seat={seat}
+        dartsCam={dartsOn}
+        jukeboxView={jukebox.focused}
         onPosition={onPosition}
       />
+      <JukeboxListener update={jukebox.updateListener} doorOpen={doorOpen} />
       <SkyStars />
+      <SideWalls />
+      <DartsBoard state={darts} onThrow={onDartThrow} active={dartsOn} mobile={coarse} />
       <LabelAnchors />
-      <BlackjackTable />
-      {!seat && (
+      <BlackjackTable receiveShadow={seat} />
+      {/* The room stays mounted while seated. Unmounting it meant the whole scene
+          suspended on the way back up, which left the player outside in the stars. */}
+      {(
         <>
           <Doors open={doorOpen} />
           <NeonSign />
           <WoodWalls />
           <BarFloor />
+          <EntrancePaving />
+          <EntranceFacade />
+          <EntrancePlanters />
+          <InteriorPlanters />
+          <BarCeiling blackjackShadows={seat} />
+          <BlackjackHangingSign />
           <Blockout />
+          <RearBar />
           <PinballCabinet />
+          <PinballNeon />
+          <RescueBoatNeon />
+          <BrickBlitzCabinet />
+          <Jukebox {...jukebox} />
+          <JukeboxNeon />
+          <Chesterfield at={CHESTERFIELD_AT} yaw={Math.PI / 2} />
+          <EntranceLounge />
+          <NarrowsCabinet position={[NARROWS_AT[0], 0, NARROWS_AT[1]]} rotation={NARROWS_YAW} scale={NARROWS_SCALE} onClick={(event) => {
+            const { x, z } = event.camera.position;
+            if (dartsOn || jukebox.focused || event.delta > 6 || Math.hypot(x - NARROWS_AT[0], z - NARROWS_AT[1]) > NARROWS_REACH) return;
+            event.stopPropagation();
+            onNarrowsPlay();
+          }} />
+          <BrickBlitzNeon />
+          <DartsNeon wallX={DARTS.wallX} boardZ={DARTS.boardZ} />
         </>
       )}
       {seat && (
         <>
-          <GameFloor />
           <Suspense fallback={null}>
             <BlackjackCards state={blackjack} />
+            <ReadySignal key={loadingId} onReady={onTableReady ?? onReady} />
           </Suspense>
           <TableResult outcome={blackjack.phase === 'verdict' ? blackjack.outcome : null} />
+          {seatedVisibleKey ? (
+            <ReadySignal key={`seated-${seatedVisibleKey}`} onReady={onSeatedVisible} />
+          ) : null}
         </>
       )}
     </Canvas>
