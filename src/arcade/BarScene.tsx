@@ -745,7 +745,7 @@ export function BarScene({
 
   return (
     <>
-    <Canvas shadows={coarse ? (seat ? "percentage" : false) : "percentage"} dpr={coarse ? 1 : [1, 2]} gl={{ antialias: !coarse }} frameloop={paused ? 'never' : coarse && !seat ? 'demand' : 'always'} camera={{ position: VIEWS[0]!.position, fov: 90, near: 0.05, far: 400 }}>
+    <Canvas shadows={coarse ? false : "percentage"} dpr={coarse ? 1 : [1, 2]} gl={{ antialias: !coarse }} frameloop={paused ? 'never' : coarse && !seat ? 'demand' : 'always'} camera={{ position: VIEWS[0]!.position, fov: 90, near: 0.05, far: 400 }}>
       {coarse && !paused && !seat && <FrameCap fps={30} />}
       {perf && <PerfProbe />}
       <color attach="background" args={['#070d0a']} />
@@ -753,7 +753,7 @@ export function BarScene({
       {!seat && (warmRoom && onReady
         ? <WarmRoom key={loadingId} onReady={onReady} />
         : <ReadySignal key={loadingId} onReady={onReady} />)}
-      <ambientLight intensity={0.38} color="#ffd9a8" />
+      <ambientLight intensity={coarse && seat ? 0.58 : 0.38} color="#ffd9a8" />
       <hemisphereLight args={['#ffcf9a', '#0a1a12', 0.35]} />
       <pointLight position={[0, 4.2, 13.5]} intensity={seat ? 10 : 18} distance={14} color="#ffbf73" />
       <DebugScene />
@@ -775,6 +775,7 @@ export function BarScene({
       <BlackjackTable receiveShadow={seat} />
       {/* The room stays mounted while seated. Unmounting it meant the whole scene
           suspended on the way back up, which left the player outside in the stars. */}
+      <group visible={!(coarse && seat)}>
       {(
         <>
           <Doors open={doorOpen} />
@@ -785,7 +786,15 @@ export function BarScene({
           <EntranceFacade />
           <EntrancePlanters />
           <InteriorPlanters />
-          <BarCeiling blackjackShadows={seat} />
+        </>
+      )}
+      </group>
+      {/* The ceiling stays drawn when seated: the lamp over the table is the only
+          light that matters there, and the geometry above is behind the camera. */}
+      <BarCeiling blackjackShadows={seat} />
+      <group visible={!(coarse && seat)}>
+      {(
+        <>
           <BlackjackHangingSign />
           <Blockout />
           <RearBar />
@@ -804,9 +813,9 @@ export function BarScene({
             onNarrowsPlay();
           }} />
           <BrickBlitzNeon />
-          <DartsNeon wallX={DARTS.wallX} boardZ={DARTS.boardZ} />
         </>
       )}
+      </group>
       {seat && (
         <>
           <Suspense fallback={null}>
