@@ -23,7 +23,7 @@ function PadKey({ code, label, children }: { code: string; label: string; childr
       onPointerCancel={() => send('keyup')}
       onLostPointerCapture={() => send('keyup')}
       onContextMenu={(event) => event.preventDefault()}
-      className="pointer-events-auto flex h-16 w-16 touch-none select-none items-center justify-center rounded-full border border-[#c9973f]/45 bg-black/55 text-[#f0e6cf] backdrop-blur-[2px] active:border-[#c9973f] active:bg-black/75"
+      className="pointer-events-auto flex h-16 w-16 touch-none select-none items-center justify-center rounded-full border border-[#c9973f]/45 bg-black/55 text-[#f0e6cf] backdrop-blur-[2px] [@media(pointer:coarse)]:backdrop-blur-none active:border-[#c9973f] active:bg-black/75"
     >
       {children}
     </button>
@@ -283,7 +283,7 @@ export function NarrowsGame({ onExit, onReady, loading = false }: {
       {phase === 'over' && result && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div
-          className="pointer-events-auto flex flex-col items-center gap-4 border border-white/15 bg-black/35 px-10 py-7 text-center backdrop-blur-[3px]"
+          className="pointer-events-auto flex flex-col items-center gap-4 border border-white/15 bg-black/35 px-10 py-7 text-center backdrop-blur-[3px] [@media(pointer:coarse)]:backdrop-blur-none"
           style={{ transform: 'perspective(1100px) rotateX(30deg)', transformOrigin: '50% 100%' }}
         >
           <p

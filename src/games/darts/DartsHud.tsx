@@ -137,7 +137,7 @@ export function DartsHud({
             data-darts-throw
             aria-label="Hold to throw the dart"
             onContextMenu={(event) => event.preventDefault()}
-            className="pointer-events-auto flex h-24 w-24 touch-none select-none flex-col items-center justify-center rounded-full border border-[#c9973f]/45 bg-black/55 text-[#f0e6cf] backdrop-blur-[2px] active:border-[#c9973f] active:bg-black/80"
+            className="pointer-events-auto flex h-24 w-24 touch-none select-none flex-col items-center justify-center rounded-full border border-[#c9973f]/45 bg-black/55 text-[#f0e6cf] backdrop-blur-[2px] [@media(pointer:coarse)]:backdrop-blur-none active:border-[#c9973f] active:bg-black/80"
           >
             <span className="font-display text-[12px] uppercase tracking-[0.2em]">Hold</span>
             <span className="mt-0.5 text-[8px] uppercase tracking-[0.18em] text-[#8fa697]">

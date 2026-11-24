@@ -8,8 +8,6 @@ import { useDarts } from './games/darts/useDarts';
 import { DartsHud } from './games/darts/DartsHud';
 import { DARTS } from './games/darts/DartsBoard';
 import { GameOverlay } from './games/blackjack/GameOverlay';
-import { PinballTable } from './games/pinball/PinballGame';
-import { NarrowsGame } from './games/narrows/NarrowsGame';
 import { useJukebox } from './games/jukebox/useJukebox';
 import { JUKEBOX_TRACKS } from './games/jukebox/tracks';
 import { prepareSfx, setMuted as setBarMuted, unlockSfx } from './lib/sfx';
@@ -17,6 +15,12 @@ import { onGameMute } from './lib/gameSound';
 
 const BrickBlitz = lazy(() =>
   import('./games/brickblitz/BrickBlitz').then(({ BrickBlitz }) => ({ default: BrickBlitz })),
+);
+const PinballTable = lazy(() =>
+  import('./games/pinball/PinballGame').then(({ PinballTable }) => ({ default: PinballTable })),
+);
+const NarrowsGame = lazy(() =>
+  import('./games/narrows/NarrowsGame').then(({ NarrowsGame }) => ({ default: NarrowsGame })),
 );
 
 function lookAt(view: View): Look {
@@ -413,8 +417,10 @@ export function App() {
             </Suspense>
             {pinballOpened && (
               <div className={pinball ? 'absolute inset-0 z-20' : 'hidden'}>
-                <PinballTable active={pinball} onExit={exitPinball}
-                  loadingId={pinball ? loaderId : undefined} onReady={pinball && loading ? finishLoading : undefined} />
+                <Suspense fallback={null}>
+                  <PinballTable active={pinball} onExit={exitPinball}
+                    loadingId={pinball ? loaderId : undefined} onReady={pinball && loading ? finishLoading : undefined} />
+                </Suspense>
               </div>
             )}
             {arcadeGame === 'brick-blitz' && (
@@ -559,7 +565,11 @@ export function App() {
 
           {coarse && !playingArcade && !dartsOn && !seated && !jukeboxOn && <WalkPad move={move} />}
 
-          {arcadeGame === 'narrows' && <NarrowsGame loading={loading} onExit={exitNarrows} onReady={loading ? finishLoading : undefined} />}
+          {arcadeGame === 'narrows' && (
+            <Suspense fallback={null}>
+              <NarrowsGame loading={loading} onExit={exitNarrows} onReady={loading ? finishLoading : undefined} />
+            </Suspense>
+          )}
         </div>
       )}
 

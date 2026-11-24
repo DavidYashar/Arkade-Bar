@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { RoundedBox, useGLTF, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
+import { prepareRapier } from "@/lib/rapier";
 import { BlurredBarFloor } from "@/arcade/BlurredBarFloor";
 import { ReadySignal } from "@/arcade/ReadySignal";
 import { MuteButton } from "@/arcade/MuteButton";
@@ -972,7 +973,7 @@ function Pinball({
     let myEvents: RAPIER.EventQueue | null = null;
 
     void (async () => {
-      await RAPIER.init();
+      await prepareRapier();
       if (cancelled) return;
 
       // The table is flat on screen; the slope is this constant pull toward the player.
@@ -1966,7 +1967,7 @@ function ThumbKey({ code, label, children }: { code: string; label: string; chil
       onPointerCancel={() => send("keyup")}
       onLostPointerCapture={() => send("keyup")}
       onContextMenu={(event) => event.preventDefault()}
-      className="pointer-events-auto flex h-16 w-16 touch-none select-none items-center justify-center rounded-full border border-[#c9973f]/45 bg-black/55 text-[#f0e6cf] backdrop-blur-[2px] active:border-[#c9973f] active:bg-black/75"
+      className="pointer-events-auto flex h-16 w-16 touch-none select-none items-center justify-center rounded-full border border-[#c9973f]/45 bg-black/55 text-[#f0e6cf] backdrop-blur-[2px] [@media(pointer:coarse)]:backdrop-blur-none active:border-[#c9973f] active:bg-black/75"
     >
       {children}
     </button>
@@ -2038,11 +2039,11 @@ export function PinballTable({ onExit, onReady, loadingId, active = true }: {
       )}
       <div className="relative min-h-0 flex-1">
       <Canvas
-        shadows="percentage"
+        shadows={coarse ? false : "percentage"}
         frameloop={active ? "always" : "never"}
         dpr={coarse ? [1, 1.25] : [1, 2]}
         camera={{ position: [1.42, 2.72, 0], fov: 40, near: 0.02, far: 40 }}
-        gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+        gl={{ antialias: !coarse, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         onCreated={({ camera }) => camera.lookAt(0, PLAY.y + 0.02, 0)}
       >
         <color attach="background" args={["#24180f"]} />
@@ -2126,7 +2127,7 @@ export function PinballTable({ onExit, onReady, loadingId, active = true }: {
 
       {over && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-          <div className="pointer-events-auto flex flex-col items-center gap-4 border border-white/15 bg-black/45 px-10 py-7 text-center backdrop-blur-[3px]">
+          <div className="pointer-events-auto flex flex-col items-center gap-4 border border-white/15 bg-black/45 px-10 py-7 text-center backdrop-blur-[3px] [@media(pointer:coarse)]:backdrop-blur-none">
             <p
               className="text-3xl font-black uppercase leading-none tracking-[0.22em] text-[#ec3a2c]"
               style={{

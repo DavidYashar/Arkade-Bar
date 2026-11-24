@@ -7,6 +7,7 @@ import { RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 import type { Mesh } from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
+import { prepareRapier } from "@/lib/rapier";
 import { BlurredBarFloor } from "@/arcade/BlurredBarFloor";
 import { ReadySignal } from "@/arcade/ReadySignal";
 import { MuteButton } from "@/arcade/MuteButton";
@@ -618,7 +619,7 @@ function Physics({
     let cancelled = false;
 
     void (async () => {
-      await RAPIER.init();
+      await prepareRapier();
       if (cancelled) return;
 
       const w = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
@@ -1247,11 +1248,11 @@ export function BrickBlitz({ onExit, onReady, loading = false, active = true }: 
       )}
       <div className="relative min-h-0 flex-1">
       <Canvas
-        shadows="percentage"
+        shadows={coarse ? false : "percentage"}
         frameloop={active ? "always" : "never"}
         dpr={coarse ? [1, 1.25] : [1, 2]}
         camera={{ position: [2.96, 4.3, 0], fov: 44, near: 0.05, far: 60 }}
-        gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+        gl={{ antialias: !coarse, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
         onCreated={({ camera }) => camera.lookAt(0, BED.y + 0.02, 0)}
       >
         <color attach="background" args={["#24180f"]} />

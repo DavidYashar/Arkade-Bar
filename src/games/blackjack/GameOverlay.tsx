@@ -122,7 +122,7 @@ export function GameOverlay({
       )}
 
       {state.phase === 'summary' && (
-        <div className="panel-drop pointer-events-auto mx-auto w-full max-w-lg rounded-sm border border-[#c9973f]/20 bg-[#07110c]/78 p-5 shadow-2xl backdrop-blur-[4px]">
+        <div className="panel-drop pointer-events-auto mx-auto w-full max-w-lg rounded-sm border border-[#c9973f]/20 bg-[#07110c]/78 p-5 shadow-2xl backdrop-blur-[4px] [@media(pointer:coarse)]:backdrop-blur-none">
           <div className="line-rise flex items-end justify-between" style={{ animationDelay: '90ms' }}>
             <div>
               <p className="text-[10px] uppercase tracking-[0.3em] text-[#c9973f]">Round complete</p>
