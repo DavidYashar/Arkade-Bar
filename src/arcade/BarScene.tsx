@@ -5,6 +5,7 @@ import type { Object3D } from 'three';
 import { BackSide, BufferAttribute, CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, PointLight, PropertyBinding, SpotLight, SRGBColorSpace, Vector3 } from 'three';
 import type { View } from './views';
 import { ReadySignal } from './ReadySignal';
+import { FrameCap, PerfOverlay, PerfProbe } from './Perf';
 import { VIEWS } from './views';
 import { blocked, insideBounds, BRICK_BLITZ_AT, CHESTERFIELD_AT, DOOR_AT, ENTRANCE_COUCH_AT, ENTRANCE_PLANTERS, ENTRANCE_TABLE_AT, INTERIOR_PLANTERS, JUKEBOX_AT, NARROWS_AT, NARROWS_REACH, NARROWS_SCALE, NARROWS_YAW, PINBALL_AT } from './colliders';
 import { BrickBlitzNeon, DartsNeon, JukeboxNeon, PinballNeon, RescueBoatNeon } from './ArcadeNeon';
@@ -734,12 +735,19 @@ export function BarScene({
   const [coarse] = useState(() => typeof window !== 'undefined'
     && window.matchMedia('(pointer: coarse)').matches);
 
+  /** ?perf=1 shows frame cost, for tuning on a real device. */
+  const [perf] = useState(() => typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).has('perf'));
+
   useEffect(() => {
     document.body.dataset.door = doorOpen ? 'open' : 'closed';
   }, [doorOpen]);
 
   return (
-    <Canvas shadows={coarse ? (seat ? "percentage" : false) : "percentage"} dpr={coarse ? [1, 1.25] : [1, 2]} gl={{ antialias: !coarse }} frameloop={paused ? 'never' : 'always'} camera={{ position: VIEWS[0]!.position, fov: 90, near: 0.05, far: 400 }}>
+    <>
+    <Canvas shadows={coarse ? (seat ? "percentage" : false) : "percentage"} dpr={coarse ? 1 : [1, 2]} gl={{ antialias: !coarse }} frameloop={paused ? 'never' : coarse ? 'demand' : 'always'} camera={{ position: VIEWS[0]!.position, fov: 90, near: 0.05, far: 400 }}>
+      {coarse && !paused && <FrameCap fps={30} />}
+      {perf && <PerfProbe />}
       <color attach="background" args={['#070d0a']} />
       <fog attach="fog" args={['#070d0a', 20, 55]} />
       {!seat && (warmRoom && onReady
@@ -812,6 +820,8 @@ export function BarScene({
         </>
       )}
     </Canvas>
+      {perf && <PerfOverlay enabled />}
+    </>
   );
 }
 

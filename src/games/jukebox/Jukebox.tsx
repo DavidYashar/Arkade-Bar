@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useThree } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { AdditiveBlending, CanvasTexture, Group, MathUtils, MeshBasicMaterial, SRGBColorSpace, Vector3 } from 'three';
@@ -146,6 +147,8 @@ function SpectrumProjection({
   const faceRef = useRef(faceReady);
   faceRef.current = faceReady;
 
+  const camera = useThree(({ camera: cam }) => cam);
+  const lastDraw = useRef(-1);
   const bins = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const levels = useRef(new Float32Array(BARS));
   const frame = useRef(0);
@@ -156,6 +159,13 @@ function SpectrumProjection({
       panel.current.visible = active || panel.current.opacity > .002;
     }
     if (!active) return;
+
+    // Skip the whole update when the wall is behind you: the music still plays.
+    const forward = camera.getWorldDirection(new Vector3());
+    const toPanel = new Vector3(JUKEBOX_AT[0] - 0.07, 2.52, JUKEBOX_AT[1]).sub(camera.position);
+    if (toPanel.dot(forward) < 0.2) return;
+    // Twelve frames a second is plenty for a spectrum, and a quarter of the cost.
+    if (state.clock.elapsedTime - lastDraw.current < 1 / 12) return;
 
     const analyser = getAnalyser();
     if (analyser) {
@@ -183,6 +193,7 @@ function SpectrumProjection({
     frame.current += 1;
     if (frame.current % 2 !== 0) return;
 
+    lastDraw.current = state.clock.elapsedTime;
     const time = state.clock.elapsedTime;
     const W = 1024;
     const H = 384;

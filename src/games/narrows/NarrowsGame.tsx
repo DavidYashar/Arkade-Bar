@@ -124,7 +124,14 @@ export function NarrowsGame({ onExit, onReady, loading = false }: {
     window.addEventListener('keyup', up);
     window.addEventListener('blur', blur);
 
-    const ctx = board.getContext('2d');
+    // A phone has no cabinet to texture: the page canvas IS the board, so the game
+    // draws once instead of drawing then copying and scaling the lot.
+    const target = coarse && screenRef.current ? screenRef.current : board;
+    if (target !== board) {
+      target.width = BOARD.w;
+      target.height = BOARD.h;
+    }
+    const ctx = target.getContext('2d');
     let frame = 0;
     let last = performance.now();
     let seen: Phase = 'flying';
@@ -180,25 +187,6 @@ export function NarrowsGame({ onExit, onReady, loading = false }: {
           ctx.arc(x, y, radius, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
-        }
-      }
-      if (coarse && screenRef.current) {
-        const surface = screenRef.current;
-        const ratio = Math.min(2, window.devicePixelRatio || 1);
-        const cw = surface.clientWidth;
-        const ch = surface.clientHeight;
-        const pw = Math.max(1, Math.round(cw * ratio));
-        const ph = Math.max(1, Math.round(ch * ratio));
-        if (surface.width !== pw || surface.height !== ph) {
-          surface.width = pw;
-          surface.height = ph;
-        }
-        const screen = surface.getContext('2d');
-        if (screen) {
-          screen.setTransform(ratio, 0, 0, ratio, 0, 0);
-          // Stretched to the page: the board reaches the top and bottom edges, and
-          // the controls float over it.
-          screen.drawImage(board, 0, 0, cw, ch);
         }
       }
       if (machine.phase === 'over' && !cardShown && machine.explosion.age >= 1.15) {
