@@ -25,6 +25,7 @@ const vertexShader = /* glsl */ `
 
 const fragmentShader = /* glsl */ `
   uniform sampler2D slopes;
+  uniform vec2 pixelScale;
   uniform sampler2D foamAtlas;
   uniform vec2 board;
   uniform float mapReady;
@@ -47,7 +48,7 @@ const fragmentShader = /* glsl */ `
   }
 
   vec3 boatFoam(vec3 water) {
-    vec2 pixel = vec2(gl_FragCoord.x, board.y - gl_FragCoord.y);
+    vec2 pixel = vec2(gl_FragCoord.x * pixelScale.x, board.y - gl_FragCoord.y * pixelScale.y);
     for (int i = 0; i < ${MAX_WAKES}; ++i) {
       if (i >= wakeCount) break;
       vec4 pose = wakePose[i];
@@ -162,6 +163,7 @@ class RiverSurface {
     vertexShader, fragmentShader, depthTest: false, depthWrite: false,
     uniforms: {
       slopes: { value: null }, mapReady: { value: 0 }, time: { value: 0 }, board: { value: [1, 1] },
+      pixelScale: { value: [1, 1] },
       foamAtlas: { value: null }, wakeCount: { value: 0 },
       wakePose: { value: Array.from({ length: MAX_WAKES }, () => new Vector4()) },
       wakeShape: { value: Array.from({ length: MAX_WAKES }, () => new Vector4()) },
@@ -189,14 +191,18 @@ class RiverSurface {
   }
 
   draw(ctx: CanvasRenderingContext2D, distance: number, range: number, time: number,
-    project: Project, rows: RiverRow[], wakes: readonly BoatWake[]) {
+    project: Project, rows: RiverRow[], wakes: readonly BoatWake[],
+    boardWidth?: number, boardHeight?: number) {
     if (this.renderer.getContext().isContextLost()) return false;
     const { width, height } = ctx.canvas;
     if (this.renderer.domElement.width !== width || this.renderer.domElement.height !== height) {
       this.renderer.setSize(width, height, false);
     }
+    const boardW = boardWidth ?? width;
+    const boardH = boardHeight ?? height;
     const uniforms = this.material.uniforms;
-    uniforms.board!.value = [width, height];
+    uniforms.board!.value = [boardW, boardH];
+    uniforms.pixelScale!.value = [boardW / width, boardH / height];
     uniforms.time!.value = time;
     const count = this.foamReady ? Math.min(wakes.length, MAX_WAKES) : 0;
     uniforms.wakeCount!.value = count;
@@ -208,7 +214,7 @@ class RiverSurface {
     }
     this.updateSurface(distance, range, project, rows);
     this.renderer.render(this.scene, this.camera);
-    ctx.drawImage(this.renderer.domElement, 0, 0);
+    ctx.drawImage(this.renderer.domElement, 0, 0, boardW, boardH);
     return true;
   }
 
@@ -261,7 +267,8 @@ class RiverSurface {
 let surface: RiverSurface | null | undefined;
 
 export function drawThreeRiver(ctx: CanvasRenderingContext2D, distance: number, range: number,
-  time: number, project: Project, rows: RiverRow[], wakes: readonly BoatWake[]) {
+  time: number, project: Project, rows: RiverRow[], wakes: readonly BoatWake[],
+  boardWidth?: number, boardHeight?: number) {
   if (surface === undefined && typeof document !== 'undefined') {
     try {
       const canvas = document.createElement('canvas');
@@ -271,5 +278,5 @@ export function drawThreeRiver(ctx: CanvasRenderingContext2D, distance: number, 
       surface = null;
     }
   }
-  return surface?.draw(ctx, distance, range, time, project, rows, wakes) ?? false;
+  return surface?.draw(ctx, distance, range, time, project, rows, wakes, boardWidth, boardHeight) ?? false;
 }

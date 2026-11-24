@@ -31,12 +31,12 @@ export class BoatView {
     patrol: null, helicopter: null, cannon: null, helicopterShadow: null, cannonShadow: null, bridge: null,
   };
 
-  constructor() {
+  constructor({ antialias = true }: { antialias?: boolean } = {}) {
     this.canvas = document.createElement('canvas');
     this.canvas.width = 320;
     this.canvas.height = 320;
 
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias });
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(320, 320, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;

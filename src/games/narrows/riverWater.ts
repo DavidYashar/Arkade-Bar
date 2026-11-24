@@ -20,8 +20,9 @@ function ribbon(ctx: CanvasRenderingContext2D, a: Point[], b: Point[]) {
 }
 
 export function drawRiverWater(ctx: CanvasRenderingContext2D, distance: number, range: number,
-  time: number, project: Project, rows: RiverRow[], wakes: readonly BoatWake[] = []) {
-  if (drawThreeRiver(ctx, distance, range, time, project, rows, wakes)) return;
+  time: number, project: Project, rows: RiverRow[], wakes: readonly BoatWake[] = [],
+  boardWidth?: number, boardHeight?: number) {
+  if (drawThreeRiver(ctx, distance, range, time, project, rows, wakes, boardWidth, boardHeight)) return;
   const point = (x: number, z: number) => project(x, (z - distance) / range);
   const left = rows.map(({ river, depth }) => project(river.center - river.half, depth));
   const right = rows.map(({ river, depth }) => project(river.center + river.half, depth));

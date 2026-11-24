@@ -82,7 +82,7 @@ export function NarrowsGame({ onExit, onReady, loading = false }: {
     }
     setPhase('flying');
 
-    const view = new BoatView();
+    const view = new BoatView({ antialias: !coarse });
     const audio = new NarrowsAudio();
     const unmute = onGameMute((mutedNow) => audio.setMuted(mutedNow));
     if (import.meta.env.DEV) {
@@ -127,19 +127,30 @@ export function NarrowsGame({ onExit, onReady, loading = false }: {
     // A phone has no cabinet to texture: the page canvas IS the board, so the game
     // draws once instead of drawing then copying and scaling the lot.
     const target = coarse && screenRef.current ? screenRef.current : board;
+    // Three quarters of the board's pixels on a phone: the page stretches it back up,
+    // and the fill cost drops by almost half.
+    const scale = target === board ? 1 : 0.75;
     if (target !== board) {
-      target.width = BOARD.w;
-      target.height = BOARD.h;
+      target.width = Math.round(BOARD.w * scale);
+      target.height = Math.round(BOARD.h * scale);
     }
     const ctx = target.getContext('2d');
+    if (scale !== 1) ctx?.setTransform(scale, 0, 0, scale, 0, 0);
     let frame = 0;
     let last = performance.now();
+    let stepped = 0;
     let seen: Phase = 'flying';
     let cardShown = false;
     let silenced = false;
     let hasDrawnBoat = false;
 
     const loop = (now: number) => {
+      // A phone runs this game at thirty: the same picture for half the work.
+      if (coarse && now - stepped < 1000 / 30) {
+        frame = requestAnimationFrame(loop);
+        return;
+      }
+      stepped = now;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       if (!loadingRef.current) machine.update(dt, keys);

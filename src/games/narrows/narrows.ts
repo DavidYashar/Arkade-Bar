@@ -86,7 +86,7 @@ function drawRiver(ctx: CanvasRenderingContext2D, distance: number, center: numb
     return { z, depth, river: riverAt(z) };
   });
   const project = (x: number, depth: number, height?: number): Point => [screenX(x, center, depth), screenY(depth, height)];
-  drawRiverWater(ctx, distance, DEPTH, time, project, rows, wakes);
+  drawRiverWater(ctx, distance, DEPTH, time, project, rows, wakes, W, H);
   drawRiverbanks(ctx, distance, DEPTH, W, project, rows, time);
   drawIslands(ctx, distance, DEPTH, project);
 }
